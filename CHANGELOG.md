@@ -5,6 +5,18 @@ All notable changes to ACE Framework will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Playbook persistence with `save_to_file()` and `load_from_file()` methods
+- Example demonstrating playbook save/load functionality (`examples/playbook_persistence.py`)
+- py.typed file for PEP 561 type hint support
+- Documentation for playbook persistence in README
+
+### Fixed
+- README incorrectly referenced non-existent docs/ directory
+- Test badge URL in README (test.yml → tests.yml)
+
 ## [0.2.0] - 2025-10-15
 
 ### Added

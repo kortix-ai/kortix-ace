@@ -5,7 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/ace-framework.svg)](https://pypi.org/project/ace-framework/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/Kayba-ai/agentic-context-engine/actions/workflows/test.yml/badge.svg)](https://github.com/Kayba-ai/agentic-context-engine/actions)
+[![Tests](https://github.com/Kayba-ai/agentic-context-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/Kayba-ai/agentic-context-engine/actions)
 [![Paper](https://img.shields.io/badge/Paper-arXiv:2510.04618-red.svg)](https://arxiv.org/abs/2510.04618)
 
 🧠 **ACE** is a framework for building AI agents that get smarter over time by learning from their mistakes and successes.
@@ -109,7 +109,22 @@ python examples/quickstart_litellm.py
 python examples/langchain_example.py
 ```
 
-Check out the `examples/` folder for more!
+### Save and Load Playbooks
+```python
+# Save a trained playbook for later use
+adapter = OfflineAdapter(...)
+results = adapter.run(samples, environment, epochs=3)
+adapter.playbook.save_to_file("my_trained_playbook.json")
+
+# Load a pre-trained playbook
+from ace import Playbook, OnlineAdapter
+playbook = Playbook.load_from_file("my_trained_playbook.json")
+adapter = OnlineAdapter(playbook=playbook, ...)
+```
+
+Check out `examples/playbook_persistence.py` for a complete example!
+
+Explore more in the `examples/` folder!
 
 ## Supported LLM Providers
 
@@ -217,13 +232,12 @@ The framework prevents "context collapse" - a common problem where agents forget
 ```
 ace/
 ├── ace/                    # Core library
-│   ├── playbook.py        # Strategy storage
+│   ├── playbook.py        # Strategy storage & persistence
 │   ├── roles.py           # Generator, Reflector, Curator
 │   ├── adaptation.py      # Training loops
 │   └── llm_providers/     # LLM integrations
 ├── examples/              # Ready-to-run examples
-├── tests/                 # Unit tests
-└── docs/                  # Documentation
+└── tests/                 # Unit tests
 ```
 
 ## Contributing

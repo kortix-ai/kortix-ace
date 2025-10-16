@@ -4,7 +4,7 @@
 
 Agentic Context Engine is the easiest way to enhance your AI Agents through continuous learning. 
 
-**Star ⭐️ this repo if you find it useful!**
+Star ⭐️ this repo if you find it useful!
 
 [![PyPI version](https://badge.fury.io/py/ace-framework.svg)](https://badge.fury.io/py/ace-framework)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)

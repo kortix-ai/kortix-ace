@@ -58,9 +58,9 @@ That's it! Your agent is now learning and improving. 🎉
 
 ## Why Agentic Context Engine (ACE)?
 
-AI agents make the same mistakes repeatedly. Fine-tuning is expensive ($1K+ per iteration), slow (days/weeks), and requires labeled data.
+AI agents make the same mistakes repeatedly.
 
-ACE enables agents to learn from execution feedback-what works, what doesn't, and continuously improving. No training data, no fine-tuning, just automatic improvement.
+ACE enables agents to learn from execution feedback: what works, what doesn't, and continuously improve. <br> No training data, no fine-tuning, just automatic improvement.
 
 ### Clear Benefits
 - 📈 **20-35% Better Performance**: Proven improvements on complex tasks
@@ -74,13 +74,14 @@ ACE enables agents to learn from execution feedback-what works, what doesn't, an
 
 ### 🌊 The Seahorse Emoji Challenge
 
-Watch ACE learn from its own mistakes in real-time! This demo shows how ACE handles the infamous "seahorse emoji problem" - a challenge where LLMs often hallucinate that a seahorse emoji exists (it doesn't).
+A challenge where LLMs often hallucinate that a seahorse emoji exists (it doesn't).
+Watch ACE learn from its own mistakes in real-time. This demo shows how ACE handles the infamous challenge!
 
 ![Kayba Test Demo](kayba_test_demo.gif)
 
 In this example:
-- **Round 1**: The agent incorrectly provides 🐴 (horse emoji)
-- **Self-Reflection**: ACE analyzes the response without any external feedback
+- **Round 1**: The agent incorrectly outputs 🐴 (horse emoji)
+- **Self-Reflection**: ACE reflects without any external feedback
 - **Round 2**: With learned strategies from ACE, the agent successfully realizes there is no seahorse emoji
 
 Try it yourself:
@@ -88,72 +89,25 @@ Try it yourself:
 python examples/kayba_ace_test.py
 ```
 
-### Basic Q&A Agent
-
-```python
-from ace import OfflineAdapter, Generator, Reflector, Curator
-from ace import LiteLLMClient, SimpleEnvironment
-
-# Setup components
-client = LiteLLMClient(model="gpt-4o-mini")
-generator = Generator(client)
-reflector = Reflector(client)
-curator = Curator(client)
-
-# Create and train an adapter
-adapter = OfflineAdapter(generator, reflector, curator)
-environment = SimpleEnvironment()
-
-# Train on examples
-training_samples = [
-    {"question": "What's the capital of France?", "answer": "Paris"},
-    {"question": "What's 2+2?", "answer": "4"}
-]
-
-results = adapter.run(training_samples, environment, epochs=2)
-
-# Save the learned strategies
-adapter.playbook.save_to_file("my_agent.json")
-```
-
-### Online Learning (Learn While Running)
-
-```python
-from ace import OnlineAdapter
-
-# Agent improves while processing real tasks
-adapter = OnlineAdapter(
-    playbook=existing_playbook,
-    generator=generator,
-    reflector=reflector,
-    curator=curator
-)
-
-# Process tasks one by one, learning from each
-for task in real_world_tasks:
-    result = adapter.process(task, environment)
-    # Agent automatically updates its strategies
-```
-
 ---
 
 ## How does Agentic Context Engine (ACE) work?
 
-*Based on the [ACE research framework](https://arxiv.org/abs/2510.04618) from Stanford & SambaNova*
+*Based on the [ACE research framework](https://arxiv.org/abs/2510.04618) from Stanford & SambaNova.*
 
 ACE uses three specialized roles that work together:
 1. **🎯 Generator** - Executes tasks using learned strategies from the playbook
 2. **🔍 Reflector** - Analyzes what worked and what didn't after each execution
 3. **📝 Curator** - Updates the playbook with new strategies based on reflection
 
-Each execution teaches your agent:
+ACE teaches your agent and internalises:
 - **✅ Successes** → Extract patterns that work
 - **❌ Failures** → Learn what to avoid
 - **🔧 Tool usage** → Discover which tools work best for which tasks
 - **🎯 Edge cases** → Remember rare scenarios and how to handle them
 
 The magic happens in the **Playbook**—a living document of strategies that evolves with experience. <br>
-**Key innovation:** All learning happens **in context** through incremental updates—no fine-tuning, no training data, and complete transparency into what your agent learned. This approach prevents "context collapse" by preserving valuable strategies rather than rewriting the entire playbook.
+**Key innovation:** All learning happens **in context** through incremental updates—no fine-tuning, no training data, and complete transparency into what your agent learned.
 
 ```mermaid
 ---

@@ -57,9 +57,9 @@ class OpikIntegration:
 
         if self.enabled and enable_auto_config:
             try:
-                # Configure Opik with project name
-                opik.configure(project_name=project_name)
-                logger.info(f"Opik configured for project: {project_name}")
+                # Configure Opik for local use
+                opik.configure(use_local=True)
+                logger.info(f"Opik configured locally for project: {project_name}")
             except Exception as e:
                 logger.warning(f"Failed to configure Opik: {e}")
                 self.enabled = False

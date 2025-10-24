@@ -96,7 +96,7 @@ Repository = "https://github.com/Kayba-ai/agentic-context-engine"
 Issues = "https://github.com/Kayba-ai/agentic-context-engine/issues"
 
 [tool.setuptools]
-packages = ["ace", "ace.llm_providers"]
+packages = ["ace", "ace.llm_providers", "ace.observability"]
 
 [tool.setuptools.package-data]
 ace = ["py.typed"]

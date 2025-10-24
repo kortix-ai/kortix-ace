@@ -49,6 +49,16 @@ class Playbook:
         self._sections: Dict[str, List[str]] = {}
         self._next_id = 0
 
+    def __repr__(self) -> str:
+        """Concise representation for debugging and object inspection."""
+        return f"Playbook(bullets={len(self._bullets)}, sections={list(self._sections.keys())})"
+
+    def __str__(self) -> str:
+        """Human-readable representation showing actual playbook content."""
+        if not self._bullets:
+            return "Playbook(empty)"
+        return self.as_prompt()
+
     # ------------------------------------------------------------------ #
     # CRUD utils
     # ------------------------------------------------------------------ #
@@ -92,20 +102,7 @@ class Playbook:
             return None
         bullet.tag(tag, increment=increment)
 
-        # Log bullet evolution to Opik
-        try:
-            from .observability import get_integration
-            integration = get_integration()
-            integration.log_bullet_evolution(
-                bullet_id=bullet_id,
-                bullet_content=bullet.content,
-                helpful_count=bullet.helpful,
-                harmful_count=bullet.harmful,
-                neutral_count=bullet.neutral,
-                section=bullet.section
-            )
-        except Exception:
-            pass  # Graceful degradation if observability unavailable
+        # Opik tracing handles this automatically via @track decorator
 
         return bullet
 
@@ -215,30 +212,7 @@ class Playbook:
 
         bullets_after = len(self._bullets)
 
-        # Log playbook update to Opik
-        try:
-            from .observability import get_integration
-            integration = get_integration()
-
-            # Count operation types
-            add_ops = sum(1 for op in delta.operations if op.type.upper() == "ADD")
-            update_ops = sum(1 for op in delta.operations if op.type.upper() == "UPDATE")
-            remove_ops = sum(1 for op in delta.operations if op.type.upper() == "REMOVE")
-
-            integration.log_playbook_update(
-                operation_type="delta_batch",
-                bullets_added=add_ops,
-                bullets_updated=update_ops,
-                bullets_removed=remove_ops,
-                total_bullets=bullets_after,
-                metadata={
-                    "operations_count": len(delta.operations),
-                    "bullets_before": bullets_before,
-                    "bullets_after": bullets_after
-                }
-            )
-        except Exception:
-            pass  # Graceful degradation if observability unavailable
+        # Opik tracing handles this automatically via @track decorator
 
     def _apply_operation(self, operation: DeltaOperation) -> None:
         op_type = operation.type.upper()

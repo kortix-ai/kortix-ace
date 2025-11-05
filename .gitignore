@@ -85,6 +85,12 @@ kayba_test_playbook.json
 my_agent.json
 my_trained_agent.json
 
+# Checkpoint files (generated during training)
+**/checkpoints/*.json
+*_checkpoint_*.json
+*_latest.json
+evaluation_results/*.json
+
 # Benchmark data and cache
 benchmark_results/
 benchmark_cache/

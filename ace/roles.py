@@ -407,6 +407,8 @@ class Reflector:
     Args:
         llm: The LLM client to use for reflection
         prompt_template: Custom prompt template (uses REFLECTOR_PROMPT by default)
+        max_retries: Maximum attempts if JSON parsing fails (default: 3)
+        retry_prompt: Additional instruction appended on retry for JSON failures (default: English JSON reminder)
 
     Example:
         >>> from ace import Reflector, LiteLLMClient
@@ -431,10 +433,12 @@ class Reflector:
         prompt_template: str = REFLECTOR_PROMPT,
         *,
         max_retries: int = 3,
+        retry_prompt: str = "\n\nIMPORTANT: Return ONLY a single valid JSON object. Escape all quotes properly or use single quotes. Do not include any additional text outside the JSON.",
     ) -> None:
         self.llm = llm
         self.prompt_template = prompt_template
         self.max_retries = max_retries
+        self.retry_prompt = retry_prompt
 
     @maybe_track(
         name="reflector_reflect",
@@ -523,10 +527,9 @@ class Reflector:
                     last_error = err
                     if attempt + 1 >= self.max_retries:
                         break
-                    prompt = (
-                        base_prompt + "\n\n请严格输出有效 JSON，对双引号进行转义，"
-                        "不要输出额外解释性文本。"
-                    )
+                    # Append retry instruction to help LLM produce valid JSON
+                    # Configurable via retry_prompt parameter (supports different languages/models)
+                    prompt = base_prompt + self.retry_prompt
         if result is None:
             raise RuntimeError("Reflector failed to produce a result.") from last_error
         return result
@@ -550,6 +553,7 @@ class Curator:
         llm: The LLM client to use for curation
         prompt_template: Custom prompt template (uses CURATOR_PROMPT by default)
         max_retries: Maximum attempts if JSON parsing fails (default: 3)
+        retry_prompt: Additional instruction appended on retry for JSON failures (default: English JSON reminder)
 
     Example:
         >>> from ace import Curator, LiteLLMClient
@@ -590,10 +594,12 @@ class Curator:
         prompt_template: str = CURATOR_PROMPT,
         *,
         max_retries: int = 3,
+        retry_prompt: str = "\n\nIMPORTANT: Return ONLY a single valid JSON object. Escape all quotes properly or use single quotes. Do not include any additional text outside the JSON.",
     ) -> None:
         self.llm = llm
         self.prompt_template = prompt_template
         self.max_retries = max_retries
+        self.retry_prompt = retry_prompt
 
     @maybe_track(
         name="curator_curate",
@@ -661,11 +667,9 @@ class Curator:
                 last_error = err
                 if attempt + 1 >= self.max_retries:
                     break
-                prompt = (
-                    base_prompt
-                    + "\n\n提醒：仅输出有效 JSON，所有字符串请转义双引号或改用单引号，"
-                    "不要添加额外文本。"
-                )
+                # Append retry instruction to help LLM produce valid JSON
+                # Configurable via retry_prompt parameter (supports different languages/models)
+                prompt = base_prompt + self.retry_prompt
         raise RuntimeError("Curator failed to produce valid JSON.") from last_error
 
 

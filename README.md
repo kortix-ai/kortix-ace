@@ -132,6 +132,38 @@ Try it yourself:
 python examples/kayba_ace_test.py
 ```
 
+### 🌐 Browser Use Automation A/B Test
+
+A real-world comparison where both Browser Use agents check 10 domains for availability using browser automation. Same prompt, same Browser Use setup—but the ACE agent autonomously generates strategies from execution feedback.
+
+![Browser Use Demo Results](examples/browser-use/Browseruse_domain_demo_results.png)
+
+**Default Agent Behavior:**
+- Repeats failed actions throughout all runs
+- 30% success rate (3/10 runs)
+- 38.8 steps per domain on average
+
+**ACE Agent Behavior:**
+- First two domain checks: Performs similar to baseline (double-digit steps per check)
+- Then learns from mistakes and identifies the pattern
+- Remaining checks: Consistent 3-step completion
+- **Agent autonomously figured out the optimal approach**
+
+| Metric | Default | ACE |
+|--------|---------|-----|
+| Success rate | 30% | 100% |
+| Avg steps per domain | 38.8 | 6.9 |
+| Token cost | 1776k | 605k (incl. ACE) |
+
+Try it yourself:
+```bash
+# Run baseline version
+uv run python examples/browser-use/baseline_domain_checker.py
+
+# Run ACE-enhanced version
+uv run python examples/browser-use/ace_domain_checker.py
+```
+
 ---
 
 ## How does Agentic Context Engine (ACE) work?

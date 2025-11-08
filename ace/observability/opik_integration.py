@@ -285,14 +285,14 @@ class OpikIntegration:
         Returns:
             bool: True if callback was successfully configured, False otherwise
         """
-        if not self.enabled or not LITELLM_OPIK_AVAILABLE:
+        if not self.enabled or not LITELLM_OPIK_AVAILABLE or OpikLogger is None:
             return False
 
         try:
             import litellm
 
             # Initialize OpikLogger
-            opik_logger = OpikLogger()
+            opik_logger = OpikLogger()  # type: ignore[misc]
 
             # Add to LiteLLM callbacks if not already present
             if not hasattr(litellm, "callbacks") or litellm.callbacks is None:

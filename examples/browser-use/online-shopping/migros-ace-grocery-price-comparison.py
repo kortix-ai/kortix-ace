@@ -764,11 +764,18 @@ def main():
     # Create ACE components with OnlineAdapter (using LiteLLM for ACE roles)
     llm = LiteLLMClient(model="claude-haiku-4-5-20251001", temperature=0.2)
 
-    # Create separate LLM client for Reflector with higher max_tokens to handle large raw logs
+    # Create separate LLM clients for Reflector and Curator with higher max_tokens
+    # to handle large raw browser-use logs
     reflector_llm = LiteLLMClient(
         model="claude-haiku-4-5-20251001",
         temperature=0.2,
         max_tokens=8192,  # Increased from default 512 to handle verbose browser-use logs
+    )
+
+    curator_llm = LiteLLMClient(
+        model="claude-haiku-4-5-20251001",
+        temperature=0.2,
+        max_tokens=8192,  # Increased from default 512 to handle reflector's analysis
     )
 
     # Create prompt manager for enhanced prompts
@@ -780,7 +787,7 @@ def main():
         reflector=Reflector(
             reflector_llm, prompt_template=manager.get_reflector_prompt()
         ),
-        curator=Curator(llm, prompt_template=manager.get_curator_prompt()),
+        curator=Curator(curator_llm, prompt_template=manager.get_curator_prompt()),
         max_refinement_rounds=2,
     )
 

@@ -40,15 +40,20 @@ Enhancement suggestions are welcome! Please provide:
 git clone https://github.com/your-username/agentic-context-engine.git
 cd agentic-context-engine
 
-# Install in development mode with all dependencies
-pip install -e .[all,dev]
+# Install all dependencies (uses UV - 10-100x faster than pip)
+uv sync
 
 # Run tests
-python -m pytest tests/
+uv run pytest
 
-# Run linting
-black ace/
-mypy ace/
+# Run linting and formatting
+uv run black ace/ tests/ examples/
+uv run mypy ace/
+
+# Run specific test files
+uv run pytest tests/test_playbook.py
+uv run pytest -m unit  # Only unit tests
+uv run pytest -m integration  # Only integration tests
 ```
 
 ## Commit Message Format

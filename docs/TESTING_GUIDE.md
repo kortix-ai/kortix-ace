@@ -520,14 +520,17 @@ jobs:
         pip install uv
         uv sync  # Installs dev dependencies via [dependency-groups]
 
-    - name: Run tests
+    - name: Run tests with coverage
       run: |
-        python -m pytest tests/ --cov=ace --cov-report=xml
+        uv run pytest  # Respects pyproject.toml config (coverage thresholds, markers)
 
-    - name: Upload coverage
-      uses: codecov/codecov-action@v2
+    - name: Upload coverage reports (Linux only)
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+      uses: actions/upload-artifact@v4
       with:
-        file: ./coverage.xml
+        name: coverage-report
+        path: htmlcov/
+        retention-days: 30
 ```
 
 ### Pre-commit Hooks

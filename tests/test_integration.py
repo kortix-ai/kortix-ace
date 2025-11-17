@@ -10,6 +10,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+import pytest
+
 from ace import (
     Curator,
     EnvironmentResult,
@@ -72,6 +74,7 @@ class SimpleTestEnvironment(TaskEnvironment):
         )
 
 
+@pytest.mark.integration
 class TestOfflineAdaptation(unittest.TestCase):
     """Test offline adaptation flow."""
 
@@ -203,6 +206,7 @@ class TestOfflineAdaptation(unittest.TestCase):
             self.assertGreater(len(checkpoints), 0)
 
 
+@pytest.mark.integration
 class TestOnlineAdaptation(unittest.TestCase):
     """Test online adaptation flow."""
 
@@ -249,6 +253,7 @@ class TestOnlineAdaptation(unittest.TestCase):
         self.assertEqual(len(results), 3)
 
 
+@pytest.mark.integration
 class TestPlaybookPersistence(unittest.TestCase):
     """Test playbook save/load functionality."""
 
@@ -319,6 +324,7 @@ class TestPlaybookPersistence(unittest.TestCase):
             self.assertEqual(len(results), 1)
 
 
+@pytest.mark.integration
 class TestErrorRecovery(unittest.TestCase):
     """Test error handling and recovery."""
 

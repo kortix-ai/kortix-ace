@@ -28,16 +28,24 @@ jobs:
         pip install uv
         uv sync  # Installs dev dependencies via [dependency-groups]
 
-    - name: Run tests
+    - name: Run tests with coverage
       run: |
-        python -m pytest tests/ -v
+        uv run pytest
+
+    - name: Upload coverage reports (Linux only)
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: htmlcov/
+        retention-days: 30
 
     - name: Check code formatting (Linux only)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        black --check ace/
+        uv run black --check ace/
 
     - name: Type checking (Linux only)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        mypy ace/ --ignore-missing-imports
+        uv run mypy ace/ --ignore-missing-imports

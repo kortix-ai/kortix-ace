@@ -11,6 +11,9 @@ Tests the new features introduced in v2.1:
 
 import unittest
 import json
+
+import pytest
+
 from ace.prompts_v2_1 import (
     PromptManager,
     validate_prompt_output_v2_1,
@@ -21,6 +24,7 @@ from ace.prompts_v2_1 import (
 )
 
 
+@pytest.mark.unit
 class TestPromptsV21(unittest.TestCase):
     """Test suite for v2.1 prompt enhancements."""
 

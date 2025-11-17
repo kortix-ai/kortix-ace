@@ -4,7 +4,10 @@ import unittest
 from unittest.mock import patch, MagicMock
 import logging
 
+import pytest
 
+
+@pytest.mark.unit
 class TestLiteLLMClient(unittest.IsolatedAsyncioTestCase):
     """Test LiteLLM client functionality."""
 

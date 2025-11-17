@@ -2,9 +2,12 @@
 
 import unittest
 
+import pytest
+
 from ace.delta import DeltaOperation, DeltaBatch
 
 
+@pytest.mark.unit
 class TestDeltaOperation(unittest.TestCase):
     """Test DeltaOperation class."""
 
@@ -147,6 +150,7 @@ class TestDeltaOperation(unittest.TestCase):
         self.assertEqual(original.metadata, restored.metadata)
 
 
+@pytest.mark.unit
 class TestDeltaBatch(unittest.TestCase):
     """Test DeltaBatch class."""
 

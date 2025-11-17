@@ -1,7 +1,11 @@
 import unittest
+
+import pytest
+
 from ace import ReplayGenerator, Playbook, Sample
 
 
+@pytest.mark.unit
 class ReplayGeneratorTest(unittest.TestCase):
     """Test ReplayGenerator backward compatibility and new sample-based mode."""
 

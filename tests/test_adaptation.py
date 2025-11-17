@@ -1,6 +1,8 @@
 import json
 import unittest
 
+import pytest
+
 from ace import (
     DummyLLMClient,
     EnvironmentResult,
@@ -29,6 +31,7 @@ class SimpleQAEnvironment(TaskEnvironment):
         )
 
 
+@pytest.mark.unit
 class OfflineAdapterTest(unittest.TestCase):
     def test_single_step_updates_playbook(self) -> None:
         client = DummyLLMClient()

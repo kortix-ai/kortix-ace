@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from ace import Sample, EnvironmentResult
 
 # Import benchmark components
@@ -24,6 +26,7 @@ except ImportError:
 
 
 @unittest.skipUnless(BENCHMARKS_AVAILABLE, "Benchmarks module not available")
+@pytest.mark.unit
 class TestBenchmarkConfig(unittest.TestCase):
     """Test benchmark configuration loading and validation."""
 
@@ -62,6 +65,7 @@ class TestBenchmarkConfig(unittest.TestCase):
         self.assertIsNone(config.metadata)
 
 
+@pytest.mark.unit
 class TestBenchmarkSample(unittest.TestCase):
     """Test BenchmarkSample functionality (now just Sample)."""
 
@@ -85,6 +89,7 @@ class TestBenchmarkSample(unittest.TestCase):
 
 
 @unittest.skipUnless(BENCHMARKS_AVAILABLE, "Benchmarks module not available")
+@pytest.mark.unit
 class TestBenchmarkEnvironment(unittest.TestCase):
     """Test benchmark environment evaluation."""
 
@@ -156,6 +161,7 @@ class TestBenchmarkEnvironment(unittest.TestCase):
 
 
 @unittest.skipUnless(BENCHMARKS_AVAILABLE, "Benchmarks module not available")
+@pytest.mark.unit
 class TestFiNEREnvironment(unittest.TestCase):
     """Test FiNER-specific environment."""
 
@@ -210,6 +216,7 @@ class TestFiNEREnvironment(unittest.TestCase):
 
 
 @unittest.skipUnless(BENCHMARKS_AVAILABLE, "Benchmarks module not available")
+@pytest.mark.unit
 class TestBenchmarkTaskManager(unittest.TestCase):
     """Test benchmark task manager functionality."""
 
@@ -290,6 +297,7 @@ data:
                 manager.get_config("nonexistent_benchmark")
 
 
+@pytest.mark.integration
 class TestBenchmarkIntegration(unittest.TestCase):
     """Integration tests for the benchmarking system."""
 

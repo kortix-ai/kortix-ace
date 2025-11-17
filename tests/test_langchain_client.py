@@ -3,7 +3,10 @@
 import unittest
 from unittest.mock import patch, MagicMock
 
+import pytest
 
+
+@pytest.mark.unit
 class TestLangChainClient(unittest.TestCase):
     """Test LangChain client functionality."""
 

@@ -6,9 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from ace import Playbook, DeltaBatch, DeltaOperation
 
 
+@pytest.mark.unit
 class TestPlaybook(unittest.TestCase):
     """Test Playbook class functionality."""
 

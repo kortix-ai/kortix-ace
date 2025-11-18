@@ -23,6 +23,10 @@ from typing import Dict, Any, List, Optional
 PLAYBOOK_USAGE_INSTRUCTIONS = """\
 **How to use these strategies:**
 - Review bullets relevant to your current task
+- **When applying a strategy, cite its ID in your reasoning** (e.g., "Following [content_extraction-00001], I will extract the title...")
+  - Citations enable precise tracking of strategy effectiveness
+  - Makes reasoning transparent and auditable
+  - Improves learning quality through accurate attribution
 - Prioritize strategies with high success rates (helpful > harmful)
 - Apply strategies when they match your context
 - Adapt general strategies to your specific situation
@@ -184,7 +188,6 @@ CRITICAL: If playbook is empty or contains no bullets:
 Empty playbook response format:
 {{
   "reasoning": "No strategic knowledge available in playbook to apply to this problem.",
-  "bullet_ids": [],
   "step_validations": [],
   "final_answer": "no_applicable_strategies",
   "answer_confidence": 0.0,
@@ -200,8 +203,7 @@ Empty playbook response format:
 Return a SINGLE valid JSON object with this EXACT schema:
 
 {{
-  "reasoning": "<detailed step-by-step chain of thought with numbered steps>",
-  "bullet_ids": ["<id1>", "<id2>"],
+  "reasoning": "<detailed step-by-step chain of thought with numbered steps and bullet citations (e.g., 'Following [general-00042], I will...'). Cite bullet IDs inline whenever applying a strategy.>",
   "step_validations": ["<validation1>", "<validation2>"],
   "final_answer": "<complete, direct answer to the question>",
   "answer_confidence": 0.95,
@@ -222,8 +224,7 @@ Playbook contains:
 Question: "What is 15 × 24?"
 
 {{
-  "reasoning": "1. Problem: Calculate 15 × 24. 2. Applying bullet_023 for multiplication decomposition. 3. Breaking down: 15 × 24 = 15 × (20 + 4). 4. Computing: 15 × 20 = 300. 5. Computing: 15 × 4 = 60. 6. Adding: 300 + 60 = 360. 7. Applying bullet_045 for verification: 360 ÷ 24 = 15 ✓",
-  "bullet_ids": ["bullet_023", "bullet_045"],
+  "reasoning": "1. Problem: Calculate 15 × 24. 2. Following [bullet_023], applying multiplication decomposition. 3. Breaking down: 15 × 24 = 15 × (20 + 4). 4. Computing: 15 × 20 = 300. 5. Computing: 15 × 4 = 60. 6. Adding: 300 + 60 = 360. 7. Using [bullet_045] for verification: 360 ÷ 24 = 15 ✓",
   "step_validations": ["Decomposition applied correctly", "Calculations verified", "Answer confirmed"],
   "final_answer": "360",
   "answer_confidence": 1.0,
@@ -237,7 +238,6 @@ Question: "What is 15 × 24?"
 ### Bad Example (DO NOT DO THIS):
 {{
   "reasoning": "Using the playbook strategies, the answer is clear.",
-  "bullet_ids": [],
   "final_answer": "360"
 }}
 
@@ -1381,7 +1381,7 @@ def validate_prompt_output_v2_1(
 
     # Role-specific validation with v2.1 enhancements
     if role == "generator":
-        required = ["reasoning", "bullet_ids", "final_answer"]
+        required = ["reasoning", "final_answer"]
         optional_v21 = ["step_validations", "quality_check"]
 
         for field in required:

@@ -647,5 +647,77 @@ class TestCurator(unittest.TestCase):
         self.assertIn(custom_retry, second_prompt)
 
 
+class TestExtractCitedBulletIds(unittest.TestCase):
+    """Test bullet ID extraction utility."""
+
+    def test_extract_single_id(self):
+        """Extract single bullet ID."""
+        from ace.roles import extract_cited_bullet_ids
+
+        text = "Following [general-00042], I will proceed."
+        result = extract_cited_bullet_ids(text)
+        self.assertEqual(result, ["general-00042"])
+
+    def test_extract_multiple_ids(self):
+        """Extract multiple IDs in order."""
+        from ace.roles import extract_cited_bullet_ids
+
+        text = "Using [general-00042] and [geo-00003] strategies."
+        result = extract_cited_bullet_ids(text)
+        self.assertEqual(result, ["general-00042", "geo-00003"])
+
+    def test_deduplicate_preserving_order(self):
+        """Deduplicate while preserving first occurrence."""
+        from ace.roles import extract_cited_bullet_ids
+
+        text = "Start with [id-001], then [id-002], revisit [id-001]."
+        result = extract_cited_bullet_ids(text)
+        self.assertEqual(result, ["id-001", "id-002"])
+
+    def test_no_ids_found(self):
+        """Return empty list when no IDs."""
+        from ace.roles import extract_cited_bullet_ids
+
+        text = "This has no bullet citations at all."
+        result = extract_cited_bullet_ids(text)
+        self.assertEqual(result, [])
+
+    def test_mixed_with_noise(self):
+        """Extract IDs ignoring other bracketed content."""
+        from ace.roles import extract_cited_bullet_ids
+
+        text = "Use [strategy-123] but not [this is not an id] or [123]."
+        result = extract_cited_bullet_ids(text)
+        self.assertEqual(result, ["strategy-123"])
+
+    def test_various_section_names(self):
+        """Handle different section naming conventions."""
+        from ace.roles import extract_cited_bullet_ids
+
+        text = "[general-001] [content_extraction-042] [API_calls-999]"
+        result = extract_cited_bullet_ids(text)
+        self.assertEqual(
+            result, ["general-001", "content_extraction-042", "API_calls-999"]
+        )
+
+    def test_empty_string(self):
+        """Handle empty input."""
+        from ace.roles import extract_cited_bullet_ids
+
+        self.assertEqual(extract_cited_bullet_ids(""), [])
+
+    def test_multiline_text(self):
+        """Extract from multiline text."""
+        from ace.roles import extract_cited_bullet_ids
+
+        text = """
+        Step 1: Following [setup-001], initialize.
+        Step 2: Apply [process-042] for data.
+        Step 3: Using [setup-001] again.
+        """
+        result = extract_cited_bullet_ids(text)
+        self.assertEqual(result, ["setup-001", "process-042"])
+
+
 if __name__ == "__main__":
     unittest.main()

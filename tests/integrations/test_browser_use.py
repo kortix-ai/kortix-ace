@@ -485,6 +485,76 @@ class TestPromptVersionUsage:
         assert "These are learned patterns, not rigid rules" in result
 
 
+class TestCitationExtraction:
+    """Test citation extraction in browser-use integration."""
+
+    def test_extract_from_agent_thoughts(self):
+        """Extract citations from browser-use agent thoughts."""
+        from browser_use import ChatBrowserUse
+        from unittest.mock import MagicMock
+
+        agent = ACEAgent(llm=ChatBrowserUse())
+
+        # Mock history with thoughts containing citations
+        mock_thought = MagicMock()
+        mock_thought.thinking = (
+            "Following [content_extraction-00001], I will extract the title."
+        )
+
+        mock_history = MagicMock()
+        mock_history.model_thoughts.return_value = [mock_thought]
+
+        cited_ids = agent._extract_cited_ids_from_history(mock_history)
+
+        assert cited_ids == ["content_extraction-00001"]
+
+    def test_extract_multiple_citations(self):
+        """Extract multiple citations from thoughts."""
+        from browser_use import ChatBrowserUse
+        from unittest.mock import MagicMock
+
+        agent = ACEAgent(llm=ChatBrowserUse())
+
+        mock_thought1 = MagicMock()
+        mock_thought1.thinking = "Using [strategy-001] to navigate."
+        mock_thought2 = MagicMock()
+        mock_thought2.thinking = "Applying [strategy-002] for extraction."
+
+        mock_history = MagicMock()
+        mock_history.model_thoughts.return_value = [mock_thought1, mock_thought2]
+
+        cited_ids = agent._extract_cited_ids_from_history(mock_history)
+
+        assert cited_ids == ["strategy-001", "strategy-002"]
+
+    def test_no_citations_returns_empty(self):
+        """Return empty list when no citations found."""
+        from browser_use import ChatBrowserUse
+        from unittest.mock import MagicMock
+
+        agent = ACEAgent(llm=ChatBrowserUse())
+
+        mock_thought = MagicMock()
+        mock_thought.thinking = "Navigate to the page and extract data."
+
+        mock_history = MagicMock()
+        mock_history.model_thoughts.return_value = [mock_thought]
+
+        cited_ids = agent._extract_cited_ids_from_history(mock_history)
+
+        assert cited_ids == []
+
+    def test_handles_missing_history_gracefully(self):
+        """Handle None history gracefully."""
+        from browser_use import ChatBrowserUse
+
+        agent = ACEAgent(llm=ChatBrowserUse())
+
+        cited_ids = agent._extract_cited_ids_from_history(None)
+
+        assert cited_ids == []
+
+
 class TestBackwardsCompatibility:
     """Test that existing code patterns still work."""
 

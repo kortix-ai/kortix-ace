@@ -20,7 +20,7 @@ Example:
 """
 
 import asyncio
-from typing import Optional, Any, Callable
+from typing import Optional, Any, Callable, List
 from pathlib import Path
 
 try:
@@ -418,6 +418,37 @@ class ACEAgent:
             "output": output,
         }
 
+    def _extract_cited_ids_from_history(self, history: Any) -> List[str]:
+        """
+        Extract cited bullet IDs from browser-use agent thoughts.
+
+        Parses only the agent's reasoning (model_thoughts), filtering out
+        tool calls, action results, and other noise.
+
+        Args:
+            history: Browser-use AgentHistoryList
+
+        Returns:
+            List of cited bullet IDs found in agent thoughts
+        """
+        if not history or not hasattr(history, "model_thoughts"):
+            return []
+
+        try:
+            thoughts = history.model_thoughts()
+            # Extract only the thinking/reasoning text (filter noise)
+            thoughts_text = "\n".join(
+                t.thinking for t in thoughts if hasattr(t, "thinking") and t.thinking
+            )
+
+            # Use public utility to extract IDs
+            from ..roles import extract_cited_bullet_ids
+
+            return extract_cited_bullet_ids(thoughts_text)
+        except Exception:
+            # Graceful degradation if extraction fails
+            return []
+
     async def _learn_from_execution(
         self, task: str, history: Any, success: bool, error: Optional[str] = None
     ):
@@ -430,17 +461,21 @@ class ACEAgent:
         # Extract rich trace information
         trace_info = self._build_rich_feedback(history, success, error)
 
+        # Extract cited bullet IDs from agent thoughts (clean, no tool noise)
+        cited_ids = self._extract_cited_ids_from_history(history)
+
         # Create GeneratorOutput (browser executed, not ACE Generator)
         # This is a "fake" output to satisfy Reflector's interface
         generator_output = GeneratorOutput(
             reasoning=f"Browser automation task: {task}",
             final_answer=trace_info["output"],
-            bullet_ids=[],  # Browser-use didn't use Generator
+            bullet_ids=cited_ids,  # Extracted from agent thoughts
             raw={
                 "steps": trace_info["steps"],
                 "success": success,
                 "execution_mode": "browser-use",
                 "trace": trace_info["raw_trace"],  # Include full trace
+                "cited_strategies": cited_ids,  # Include for debugging
             },
         )
 

@@ -71,6 +71,42 @@ def _format_optional(value: Optional[str]) -> str:
     return value or "(none)"
 
 
+def extract_cited_bullet_ids(text: str) -> List[str]:
+    """
+    Extract bullet IDs cited in text using [id-format] notation.
+
+    Parses text to find all bullet ID citations in format [section-00001].
+    Used to track which strategies were applied by analyzing reasoning traces.
+
+    Args:
+        text: Text containing bullet citations (reasoning, thoughts, etc.)
+
+    Returns:
+        List of unique bullet IDs in order of first appearance.
+        Empty list if no citations found.
+
+    Example:
+        >>> reasoning = "Following [general-00042], I verified the data. Using [geo-00003] for lookup."
+        >>> extract_cited_bullet_ids(reasoning)
+        ['general-00042', 'geo-00003']
+
+        >>> # Filter to specific text (exclude tool outputs)
+        >>> clean_text = get_agent_thoughts_only(history)
+        >>> cited_ids = extract_cited_bullet_ids(clean_text)
+        ['strategy-001']
+
+    Note:
+        Pattern matches: [word_characters-digits]
+        Deduplicates while preserving order of first occurrence.
+    """
+    import re
+
+    # Match [section-digits] pattern
+    matches = re.findall(r"\[([a-zA-Z_]+-\d+)\]", text)
+    # Deduplicate while preserving order
+    return list(dict.fromkeys(matches))
+
+
 @dataclass
 class GeneratorOutput:
     reasoning: str
@@ -192,11 +228,10 @@ class Generator:
                 data = _safe_json_loads(response.text)
                 reasoning = str(data.get("reasoning", ""))
                 final_answer = str(data.get("final_answer", ""))
-                bullet_ids = [
-                    str(item)
-                    for item in data.get("bullet_ids", [])
-                    if isinstance(item, (str, int))
-                ]
+
+                # Extract bullet IDs from reasoning citations
+                bullet_ids = extract_cited_bullet_ids(reasoning)
+
                 return GeneratorOutput(
                     reasoning=reasoning,
                     final_answer=final_answer,
@@ -495,13 +530,20 @@ class Reflector:
         **kwargs: Any,
     ) -> ReflectorOutput:
         playbook_excerpt = _make_playbook_excerpt(playbook, generator_output.bullet_ids)
+
+        # Format playbook section based on citation presence
+        if playbook_excerpt:
+            playbook_context = f"Strategies Applied:\n{playbook_excerpt}"
+        else:
+            playbook_context = "(No strategies cited - outcome-based learning)"
+
         base_prompt = self.prompt_template.format(
             question=question,
             reasoning=generator_output.reasoning,
             prediction=generator_output.final_answer,
             ground_truth=_format_optional(ground_truth),
             feedback=_format_optional(feedback),
-            playbook_excerpt=playbook_excerpt or "(no bullets referenced)",
+            playbook_excerpt=playbook_context,
         )
         result: Optional[ReflectorOutput] = None
         prompt = base_prompt

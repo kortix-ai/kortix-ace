@@ -174,7 +174,7 @@ ACE provides ready-to-use integrations with popular agentic frameworks. These cl
 Quick-start integration for simple conversational agents.
 
 ```python
-from ace.integrations import ACELiteLLM
+from ace import ACELiteLLM
 
 # Create an ACE-powered conversational agent
 agent = ACELiteLLM(model="gpt-4o-mini")
@@ -201,7 +201,7 @@ agent2 = ACELiteLLM.from_playbook("learned_strategies.json", model="gpt-4o-mini"
 Self-improving browser automation agent.
 
 ```python
-from ace.integrations import ACEAgent
+from ace import ACEAgent
 from browser_use import ChatBrowserUse
 
 # Create browser agent
@@ -228,7 +228,7 @@ print(f"Learned {len(agent.playbook.bullets())} strategies")
 Wrap LangChain chains and agents with ACE learning.
 
 ```python
-from ace.integrations import ACELangChain
+from ace import ACELangChain
 from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
@@ -540,9 +540,12 @@ logging.getLogger("ace").setLevel(logging.DEBUG)
 
 See the [examples](../examples/) directory for complete working examples:
 
+**Core Examples:**
 - `simple_ace_example.py` - Basic usage
-- `quickstart_litellm.py` - LiteLLM setup
-- `langchain_example.py` - LangChain integration
 - `playbook_persistence.py` - Save/load strategies
-- `advanced_prompts_v2.py` - v2 prompt features
-- `compare_v1_v2_prompts.py` - Performance comparison
+
+**By Category:**
+- [starter-templates/](../examples/starter-templates/) - Quick start templates
+- [langchain/](../examples/langchain/) - LangChain integration examples
+- [prompts/](../examples/prompts/) - Prompt engineering examples
+- [browser-use/](../examples/browser-use/) - Browser automation

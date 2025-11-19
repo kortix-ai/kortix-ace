@@ -24,8 +24,9 @@ pip install ace-framework
 
 # With optional features
 pip install ace-framework[observability]  # Opik monitoring + cost tracking
-pip install ace-framework[langchain]     # LangChain integration
-pip install ace-framework[all]           # All features
+pip install ace-framework[browser-use]    # Browser automation
+pip install ace-framework[langchain]      # LangChain integration
+pip install ace-framework[all]            # All features
 ```
 
 ### For Contributors

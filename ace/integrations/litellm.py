@@ -1,25 +1,25 @@
 """
-SimpleAgent - Out-of-the-box ACE learning agent for simple use cases.
+ACE + LiteLLM integration for quick-start learning agents.
 
-This module provides a high-level convenience wrapper that bundles all ACE
-components into an easy-to-use interface.
+This module provides ACELiteLLM, a high-level wrapper bundling ACE learning
+with LiteLLM for easy prototyping and simple tasks.
 
-When to Use SimpleAgent:
+When to Use ACELiteLLM:
+- Quick start: Want to try ACE with minimal setup
 - Simple tasks: Q&A, classification, reasoning
-- Don't have an existing agentic framework
-- Want ACE learning with minimal setup
-- Prototyping or experimenting with ACE
+- Prototyping: Experimenting with ACE learning
+- No framework needed: Direct LLM usage with learning
 
-When NOT to Use SimpleAgent:
+When NOT to Use ACELiteLLM:
 - Browser automation → Use ACEBrowserUse
 - LangChain chains/agents → Use ACELangChain
-- Custom agentic system → Use integration pattern
+- Custom agentic system → Use integration pattern (see docs/INTEGRATION_GUIDE.md)
 
 Example:
-    from ace import SimpleAgent
+    from ace.integrations import ACELiteLLM
 
-    # Create agent
-    agent = SimpleAgent(model="gpt-4o-mini")
+    # Create LiteLLM-enhanced agent
+    agent = ACELiteLLM(model="gpt-4o-mini")
 
     # Ask questions (uses current knowledge)
     answer = agent.ask("What is 2+2?")
@@ -36,37 +36,43 @@ Example:
     agent.save_playbook("my_agent.json")
 
     # Load in next session
-    agent = SimpleAgent(model="gpt-4o-mini", playbook_path="my_agent.json")
+    agent = ACELiteLLM(model="gpt-4o-mini", playbook_path="my_agent.json")
 """
 
 from typing import List, Optional
-from pathlib import Path
 
-from .playbook import Playbook
-from .roles import Generator, Reflector, Curator
-from .adaptation import OfflineAdapter, Sample, TaskEnvironment
-from .prompts_v2_1 import PromptManager
+from ..playbook import Playbook
+from ..roles import Generator, Reflector, Curator
+from ..adaptation import OfflineAdapter, Sample, TaskEnvironment
+from ..prompts_v2_1 import PromptManager
 
 
-class SimpleAgent:
+class ACELiteLLM:
     """
-    High-level ACE agent for simple use cases.
+    LiteLLM integration with ACE learning.
 
-    Bundles Generator, Reflector, Curator, and Playbook into a simple interface.
-    Perfect for Q&A, classification, and reasoning tasks without external frameworks.
+    Bundles Generator, Reflector, Curator, and Playbook into a simple interface
+    powered by LiteLLM (supports 100+ LLM providers).
 
-    For external frameworks, use:
-    - ACEBrowserUse for browser automation
-    - ACELangChain for LangChain chains/agents
-    - Integration pattern for custom agents
+    Perfect for:
+    - Quick start with ACE
+    - Q&A, classification, and reasoning tasks
+    - Prototyping and experimentation
+    - Learning without external frameworks
+
+    For other use cases:
+    - ACEBrowserUse: Browser automation with learning
+    - ACELangChain: LangChain chains/agents with learning
+    - Integration pattern: Custom agent systems (see docs)
 
     Attributes:
         playbook: Learned strategies (Playbook instance)
         is_learning: Whether learning is enabled
+        model: LiteLLM model name
 
     Example:
         # Basic usage
-        agent = SimpleAgent(model="gpt-4o-mini")
+        agent = ACELiteLLM(model="gpt-4o-mini")
         answer = agent.ask("What is the capital of France?")
         print(answer)  # "Paris"
 
@@ -80,7 +86,7 @@ class SimpleAgent:
 
         # Save and load
         agent.save_playbook("learned.json")
-        agent2 = SimpleAgent(model="gpt-4o-mini", playbook_path="learned.json")
+        agent2 = ACELiteLLM(model="gpt-4o-mini", playbook_path="learned.json")
     """
 
     def __init__(
@@ -92,10 +98,11 @@ class SimpleAgent:
         is_learning: bool = True,
     ):
         """
-        Initialize SimpleAgent.
+        Initialize ACELiteLLM agent.
 
         Args:
             model: LiteLLM model name (default: gpt-4o-mini)
+                   Supports 100+ providers: OpenAI, Anthropic, Google, etc.
             max_tokens: Max tokens for responses (default: 512)
             temperature: Sampling temperature (default: 0.0)
             playbook_path: Path to existing playbook (optional)
@@ -103,13 +110,29 @@ class SimpleAgent:
 
         Raises:
             ImportError: If LiteLLM is not installed
+
+        Example:
+            # OpenAI
+            agent = ACELiteLLM(model="gpt-4o-mini")
+
+            # Anthropic
+            agent = ACELiteLLM(model="claude-3-haiku-20240307")
+
+            # Google
+            agent = ACELiteLLM(model="gemini/gemini-pro")
+
+            # With existing playbook
+            agent = ACELiteLLM(
+                model="gpt-4o-mini",
+                playbook_path="expert.json"
+            )
         """
-        # Import LiteLLM (required for SimpleAgent)
+        # Import LiteLLM (required for this integration)
         try:
-            from .llm_providers import LiteLLMClient
+            from ..llm_providers import LiteLLMClient
         except ImportError:
             raise ImportError(
-                "SimpleAgent requires LiteLLM. Install with:\n"
+                "ACELiteLLM requires LiteLLM. Install with:\n"
                 "pip install ace-framework  # (LiteLLM included by default)\n"
                 "or: pip install litellm"
             )
@@ -154,9 +177,15 @@ class SimpleAgent:
             Answer string
 
         Example:
-            agent = SimpleAgent()
+            agent = ACELiteLLM()
             answer = agent.ask("What is the capital of Japan?")
             print(answer)  # "Tokyo"
+
+            # With context
+            answer = agent.ask(
+                "What is GDP?",
+                context="Economics question"
+            )
         """
         result = self.generator.generate(
             question=question, context=context, playbook=self.playbook
@@ -194,7 +223,7 @@ class SimpleAgent:
                 Sample(question="Capital of France?", ground_truth="Paris"),
             ]
 
-            agent = SimpleAgent()
+            agent = ACELiteLLM()
             results = agent.learn(samples, SimpleEnvironment(), epochs=1)
 
             print(f"Learned {len(agent.playbook.bullets())} strategies")
@@ -279,10 +308,10 @@ class SimpleAgent:
         """String representation."""
         bullets_count = len(self.playbook.bullets()) if self.playbook else 0
         return (
-            f"SimpleAgent(model='{self.model}', "
+            f"ACELiteLLM(model='{self.model}', "
             f"strategies={bullets_count}, "
             f"learning={'enabled' if self.is_learning else 'disabled'})"
         )
 
 
-__all__ = ["SimpleAgent"]
+__all__ = ["ACELiteLLM"]

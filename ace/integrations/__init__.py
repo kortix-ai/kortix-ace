@@ -5,24 +5,36 @@ This module provides integration adapters for popular agentic frameworks,
 allowing them to leverage ACE's learning capabilities.
 
 Available Integrations:
+    - LiteLLM: ACELiteLLM - Quick-start agent for simple tasks
     - browser-use: ACEAgent - Self-improving browser automation
+    - LangChain: ACELangChain - Complex workflows with learning (coming soon)
 
 Pattern:
     All integrations follow the same pattern:
-    1. External framework executes task (no ACE Generator)
+    1. External framework executes task (or ACE Generator for LiteLLM)
     2. ACE injects playbook context beforehand (via wrap_playbook_context)
     3. ACE learns from execution afterward (Reflector + Curator)
 
 Example:
+    # LiteLLM (quick start)
+    from ace.integrations import ACELiteLLM
+    agent = ACELiteLLM(model="gpt-4o-mini")
+    answer = agent.ask("What is 2+2?")
+
+    # Browser-use
     from ace.integrations import ACEAgent
     from browser_use import ChatBrowserUse
-
     agent = ACEAgent(llm=ChatBrowserUse())
     await agent.run(task="Find top HN post")
-    agent.save_playbook("hn_expert.json")
 """
 
 from .base import wrap_playbook_context
+
+# Import LiteLLM integration (always available if ace-framework installed)
+try:
+    from .litellm import ACELiteLLM
+except ImportError:
+    ACELiteLLM = None  # type: ignore
 
 # Import browser-use integration if available
 try:
@@ -33,6 +45,7 @@ except ImportError:
 
 __all__ = [
     "wrap_playbook_context",
+    "ACELiteLLM",
     "ACEAgent",
     "BROWSER_USE_AVAILABLE",
 ]

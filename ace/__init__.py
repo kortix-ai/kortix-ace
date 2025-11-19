@@ -23,14 +23,6 @@ from .adaptation import (
     AdapterStepResult,
 )
 
-# Import SimpleAgent (high-level convenience wrapper)
-try:
-    from .agent import SimpleAgent as _SimpleAgent
-
-    SimpleAgent: Optional[type] = _SimpleAgent
-except ImportError:
-    SimpleAgent: Optional[type] = None  # type: ignore
-
 # Import optional feature detection
 from .features import has_opik, has_litellm
 
@@ -62,18 +54,21 @@ else:
     LiteLLMClient: Optional[type] = None  # type: ignore
     LITELLM_AVAILABLE = False
 
-# Import integrations (browser-use, etc.) if available
+# Import integrations (LiteLLM, browser-use, etc.) if available
 try:
     from .integrations import (
+        ACELiteLLM as _ACELiteLLM,
         ACEAgent as _ACEAgent,
         wrap_playbook_context as _wrap_playbook_context,
         BROWSER_USE_AVAILABLE as _BROWSER_USE_AVAILABLE,
     )
 
+    ACELiteLLM: Optional[type] = _ACELiteLLM
     ACEAgent: Optional[type] = _ACEAgent
     wrap_playbook_context: Optional[type] = _wrap_playbook_context  # type: ignore
     BROWSER_USE_AVAILABLE = _BROWSER_USE_AVAILABLE
 except ImportError:
+    ACELiteLLM: Optional[type] = None  # type: ignore
     ACEAgent: Optional[type] = None  # type: ignore
     wrap_playbook_context: Optional[type] = None  # type: ignore
     BROWSER_USE_AVAILABLE = False
@@ -102,8 +97,8 @@ __all__ = [
     "SimpleEnvironment",
     "EnvironmentResult",
     "AdapterStepResult",
-    # Out-of-box agents
-    "SimpleAgent",
+    # Out-of-box integrations
+    "ACELiteLLM",  # LiteLLM integration (quick start)
     "ACEAgent",  # Browser-use integration
     # Utilities
     "wrap_playbook_context",

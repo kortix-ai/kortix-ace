@@ -17,12 +17,6 @@ Star ⭐️ this repo if you find it useful!
 
 ---
 
-## 🤖 LLM Quickstart
-1. Direct your favorite coding agent (Cursor, Claude Code, Codex, etc) to [Quick Start Guide](https://github.com/kayba-ai/agentic-context-engine/blob/main/docs/QUICK_START.md)
-2. Prompt away!
-
----
-
 ## ✋ Quick Start
 
 ### 1. Install
@@ -64,13 +58,13 @@ agent.save_playbook("my_agent.json")
 
 ---
 
-## 🎯 Out-of-Box Integrations
+## 🎯 Integrations
 
-ACE provides three ready-to-use integrations for different use cases:
+ACE provides three ready-to-use integrations:
 
 ### **ACELiteLLM** - Simplest Start 🚀
 
-Perfect for quick prototyping and simple tasks:
+Perfect for Q&A, classification, reasoning:
 
 ```python
 from ace import ACELiteLLM
@@ -79,11 +73,13 @@ agent = ACELiteLLM(model="gpt-4o-mini")
 answer = agent.ask("What is 2+2?")  # Uses learned strategies
 ```
 
-**Best for:** Q&A, classification, reasoning tasks
-
 ### **ACEAgent (browser-use)** - Browser Automation 🌐
 
 Self-improving browser agents with [browser-use](https://github.com/browser-use/browser-use):
+
+```bash
+pip install ace-framework[browser-use]
+```
 
 ```python
 from ace import ACEAgent
@@ -93,7 +89,8 @@ agent = ACEAgent(llm=ChatBrowserUse())
 await agent.run(task="Find top Hacker News post")  # Learns from each run
 ```
 
-**Best for:** Web scraping, form filling, browser testing
+**Features:** Drop-in replacement for `browser_use.Agent`, automatic learning, reusable playbooks
+**[→ Browser Use Guide](examples/browser-use/README.md)**
 
 ### **ACELangChain** - Complex Workflows ⛓️
 
@@ -106,62 +103,9 @@ ace_chain = ACELangChain(runnable=your_langchain_chain)
 result = ace_chain.invoke({"question": "Your task"})  # Learns automatically
 ```
 
-**Best for:** Multi-step workflows, tool-using agents, LangChain orchestration
+**Best for:** Multi-step workflows, tool-using agents
 
-**[→ Full Integration Guide](docs/INTEGRATION_GUIDE.md)**
-
----
-
-## 🌐 Browser Automation with ACE
-
-ACE integrates seamlessly with [browser-use](https://github.com/browser-use/browser-use) for self-improving browser agents:
-
-```bash
-pip install ace-framework[browser-use]
-```
-
-```python
-from ace.integrations import ACEAgent  # or: from ace import ACEAgent
-from browser_use import ChatBrowserUse
-import asyncio
-
-async def main():
-    # Drop-in replacement for browser-use Agent
-    # Two LLMs: ChatBrowserUse for browser execution, gpt-4o-mini for ACE learning
-    agent = ACEAgent(
-        llm=ChatBrowserUse(),      # Browser execution
-        ace_model="gpt-4o-mini"    # ACE learning (Reflector/Curator)
-    )
-
-    # Runs and learns automatically
-    await agent.run(task="Find top Hacker News post")
-    await agent.run(task="Find second HN post")  # Smarter!
-
-    # Save learned knowledge
-    agent.save_playbook("hn_expert.json")
-
-asyncio.run(main())
-```
-
-**Reuse learned knowledge:**
-```python
-# Load existing playbook to start with pre-trained strategies
-agent = ACEAgent(llm=ChatBrowserUse(), playbook_path="hn_expert.json")
-await agent.run(task="New task")  # Starts smart!
-```
-
-**Key Features:**
-- ✅ Drop-in replacement for `browser_use.Agent`
-- ✅ Automatic learning from browser executions
-- ✅ Reusable playbooks across sessions
-- ✅ Toggle learning on/off with `is_learning` flag
-- ✅ Works with all browser-use LLMs (ChatOpenAI, ChatBrowserUse, etc.)
-
-**Build your own integration:** See [Integration Guide](docs/INTEGRATION_GUIDE.md) to add ACE learning to any custom agentic system.
-
-**Examples:**
-- [simple_ace_agent.py](examples/browser-use/simple_ace_agent.py) - Complete browser-use example
-- [custom_integration_example.py](examples/custom_integration_example.py) - Minimal custom agent integration
+**[→ Integration Guide](docs/INTEGRATION_GUIDE.md)** | **[→ Examples](examples/)**
 
 ---
 
@@ -198,31 +142,11 @@ Try it yourself:
 uv run python examples/kayba_ace_test.py
 ```
 
-### 🌐 Browser Use Automation Demos
+### 🌐 Browser Automation
 
-#### 🛒 Online Shopping Demo
+Real-world benchmarks show ACE reduces browser automation costs by 30-50% through learned strategies.
 
-A grocery shopping automation comparison where both agents find the basket price for 5 essential items at Migros online store. 
-- **ACE Agent**: Learns efficient product search patterns and UI navigation strategies improving performance over time
-- **Baseline Agent**: Struggles with inconsistent website interactions and search failures
-
-![Online Shopping Demo Results](examples/browser-use/online-shopping/results-online-shopping-brwoser-use.png)
-
-**ACE Performance**:
-- **29.8% fewer steps** on average (57.2 vs 81.5)
-- **49.0% reduction** in browser-use tokens (595k vs 1,166k)
-- **42.6% total cost reduction** even when including ACE learning overhead
-
-Try it yourself:
-```bash
-# Run baseline version (no learning)
-uv run python examples/browser-use/online-shopping/baseline-online-shopping.py
-
-# Run ACE-enhanced version (learns and improves)
-uv run python examples/browser-use/online-shopping/ace-online-shopping.py
-```
-
-**[→ More Examples & Full Browser Use Documentation](examples/browser-use/README.md)**
+**[→ Browser Demos & Full Results](examples/browser-use/README.md)**
 
 ---
 
@@ -267,34 +191,17 @@ flowchart LR
 
 ---
 
-## Installation Options
+## Installation
 
 ```bash
-# Basic installation (~100MB - includes LiteLLM for 100+ providers)
+# Basic
 pip install ace-framework
 
-# With production monitoring (Opik integration)
-pip install ace-framework[observability]
-
-# With LangChain integration (enterprise)
-pip install ace-framework[langchain]
-
-# With local model support (Transformers)
-pip install ace-framework[transformers]
-
-# With all optional features (~500MB)
-pip install ace-framework[all]
-
-# Mix and match
-pip install ace-framework[observability,langchain]
-
-# Development from source (contributors) - UV Method (10-100x faster)
-git clone https://github.com/kayba-ai/agentic-context-engine
-cd agentic-context-engine
-uv sync                    # Installs core + dev tools
-
-# To run browser automation demos (contributors only)
-uv sync --group demos      # Also installs browser-use, playwright, etc.
+# With extras
+pip install ace-framework[browser-use]      # Browser automation
+pip install ace-framework[langchain]        # LangChain
+pip install ace-framework[observability]    # Opik monitoring
+pip install ace-framework[all]              # All features
 ```
 
 ## Configuration
@@ -312,43 +219,16 @@ client = LiteLLMClient(
 )
 ```
 
-### Observability with Opik
+### Production Monitoring
 
-ACE includes built-in Opik integration for production monitoring and debugging.
-If Opik is not installed or configured, ACE continues to work normally without tracing. No code changes needed.
+ACE includes built-in Opik integration for tracing and cost tracking:
 
-#### Quick Start
 ```bash
-# Install with Opik support
-pip install ace-framework opik
-
-# Set your Opik API key (or use local deployment)
+pip install ace-framework[observability]
 export OPIK_API_KEY="your-api-key"
-export OPIK_PROJECT_NAME="ace-project"
 ```
 
-#### What Gets Tracked
-When Opik is available, ACE automatically logs:
-- **Generator**: Input questions, reasoning, and final answers
-- **Reflector**: Error analysis and bullet classifications
-- **Curator**: Playbook updates and delta operations
-- **Playbook Evolution**: Changes to strategies over time
-
-#### Viewing Traces
-```python
-# Opik tracing is automatic - just run your ACE code normally
-from ace import Generator, Reflector, Curator, Playbook
-from ace.llm_providers import LiteLLMClient
-
-# All role interactions are automatically tracked
-generator = Generator(llm_client)
-output = generator.generate(
-    question="What is 2+2?",
-    context="Show your work",
-    playbook=playbook
-)
-# View traces at https://www.comet.com/opik or your local Opik instance
-```
+Automatically tracks: LLM calls, costs, playbook evolution. View at [comet.com/opik](https://www.comet.com/opik)
 
 ---
 

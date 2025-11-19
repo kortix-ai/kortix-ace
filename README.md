@@ -93,6 +93,54 @@ playbook.save_to_file("my_agent.json")
 
 ---
 
+## 🎯 Out-of-Box Integrations
+
+ACE provides three ready-to-use integrations for different use cases:
+
+### **ACELiteLLM** - Simplest Start 🚀
+
+Perfect for quick prototyping and simple tasks:
+
+```python
+from ace import ACELiteLLM
+
+agent = ACELiteLLM(model="gpt-4o-mini")
+answer = agent.ask("What is 2+2?")  # Uses learned strategies
+```
+
+**Best for:** Q&A, classification, reasoning tasks
+
+### **ACEAgent** - Browser Automation 🌐
+
+Self-improving browser agents with [browser-use](https://github.com/browser-use/browser-use):
+
+```python
+from ace import ACEAgent
+from browser_use import ChatBrowserUse
+
+agent = ACEAgent(llm=ChatBrowserUse())
+await agent.run(task="Find top Hacker News post")  # Learns from each run
+```
+
+**Best for:** Web scraping, form filling, browser testing
+
+### **ACELangChain** - Complex Workflows ⛓️
+
+Wrap any LangChain chain/agent with learning:
+
+```python
+from ace import ACELangChain
+
+ace_chain = ACELangChain(runnable=your_langchain_chain)
+result = ace_chain.invoke({"input": "Your task"})  # Learns automatically
+```
+
+**Best for:** Multi-step workflows, tool-using agents, LangChain orchestration
+
+**[→ Full Integration Guide](docs/INTEGRATION_GUIDE.md)**
+
+---
+
 ## 🌐 Browser Automation with ACE
 
 ACE integrates seamlessly with [browser-use](https://github.com/browser-use/browser-use) for self-improving browser agents:

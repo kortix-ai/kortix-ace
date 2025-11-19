@@ -24,7 +24,7 @@ Do you have an existing agentic system?
 │
 ├─ YES → Use INTEGRATION PATTERN
 │   │
-│   ├─ Browser automation? → Use ACEBrowserUse
+│   ├─ Browser automation? → Use ACEAgent
 │   ├─ LangChain chains/agents? → Use ACELangChain
 │   └─ Custom agent? → Follow this guide
 │
@@ -564,7 +564,7 @@ def _inject_context(self, task: str) -> str:
 
 ## See Also
 
-- **Out-of-box integrations:** ACELiteLLM, ACEBrowserUse, ACELangChain
+- **Out-of-box integrations:** ACELiteLLM, ACEAgent, ACELangChain
 - **Integration patterns:** [INTEGRATION_PATTERNS.md](INTEGRATION_PATTERNS.md)
 - **Full ACE guide:** [COMPLETE_GUIDE_TO_ACE.md](COMPLETE_GUIDE_TO_ACE.md)
 - **API reference:** [API_REFERENCE.md](API_REFERENCE.md)

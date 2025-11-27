@@ -22,6 +22,12 @@ from .adaptation import (
     EnvironmentResult,
     AdapterStepResult,
 )
+from .async_learning import (
+    LearningTask,
+    ReflectionResult,
+    ThreadSafePlaybook,
+    AsyncLearningPipeline,
+)
 
 # Import optional feature detection
 from .features import has_opik, has_litellm
@@ -109,6 +115,11 @@ __all__ = [
     "ACELangChain",  # LangChain integration (complex workflows)
     # Utilities
     "wrap_playbook_context",
+    # Async learning
+    "LearningTask",
+    "ReflectionResult",
+    "ThreadSafePlaybook",
+    "AsyncLearningPipeline",
     # Feature flags
     "OpikIntegration",
     "LITELLM_AVAILABLE",

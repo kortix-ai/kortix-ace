@@ -6,9 +6,19 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+)
 
 if TYPE_CHECKING:
+    from .async_learning import AsyncLearningPipeline
     from .observability.opik_integration import OpikIntegration
 
 from .playbook import Playbook
@@ -132,11 +142,18 @@ class SimpleEnvironment(TaskEnvironment):
 
 @dataclass
 class AdapterStepResult:
+    """Result from processing a single sample through the ACE pipeline.
+
+    In sync mode, all fields are populated immediately.
+    In async mode, reflection and curator_output may be None initially
+    (they are processed in background).
+    """
+
     sample: Sample
     generator_output: GeneratorOutput
     environment_result: EnvironmentResult
-    reflection: ReflectorOutput
-    curator_output: CuratorOutput
+    reflection: Optional[ReflectorOutput]  # None in async mode until processed
+    curator_output: Optional[CuratorOutput]  # None in async mode until processed
     playbook_snapshot: str
 
     # Observability metadata
@@ -158,6 +175,11 @@ class AdapterBase:
         max_refinement_rounds: int = 1,
         reflection_window: int = 3,
         enable_observability: bool = True,
+        # Async learning parameters
+        async_learning: bool = False,
+        max_reflector_workers: int = 3,
+        on_learning_error: Optional[Callable[[Exception, Any], None]] = None,
+        on_learning_complete: Optional[Callable[[Any, Any], None]] = None,
     ) -> None:
         self.playbook = playbook or Playbook()
         self.generator = generator
@@ -166,6 +188,13 @@ class AdapterBase:
         self.max_refinement_rounds = max_refinement_rounds
         self.reflection_window = reflection_window
         self._recent_reflections: List[str] = []
+
+        # Async learning configuration
+        self._async_learning = async_learning
+        self._max_reflector_workers = max_reflector_workers
+        self._on_learning_error = on_learning_error
+        self._on_learning_complete = on_learning_complete
+        self._async_pipeline: Optional[AsyncLearningPipeline] = None
 
         # Observability integration
         self.enable_observability = enable_observability
@@ -253,6 +282,92 @@ class AdapterBase:
             "opik_available": self.opik_integration.is_available(),
             "playbook_stats": self.playbook.stats(),
         }
+
+    # ------------------------------------------------------------------ #
+    # Async learning control methods
+    # ------------------------------------------------------------------ #
+    def _setup_async_pipeline(self) -> None:
+        """Initialize the async learning pipeline."""
+        if self._async_pipeline is not None:
+            return
+
+        from .async_learning import AsyncLearningPipeline
+
+        self._async_pipeline = AsyncLearningPipeline(
+            playbook=self.playbook,
+            reflector=self.reflector,
+            curator=self.curator,
+            max_reflector_workers=self._max_reflector_workers,
+            max_refinement_rounds=self.max_refinement_rounds,
+            on_error=self._on_learning_error,
+            on_complete=self._on_learning_complete,
+        )
+
+    def start_async_learning(self) -> None:
+        """Start the async learning pipeline.
+
+        Call this before processing samples in async mode.
+        """
+        if not self._async_learning:
+            return
+
+        self._setup_async_pipeline()
+        if self._async_pipeline:
+            self._async_pipeline.start()
+
+    def stop_async_learning(self, wait: bool = True, timeout: float = 30.0) -> int:
+        """Stop the async learning pipeline.
+
+        Args:
+            wait: If True, wait for pending tasks to complete
+            timeout: Max seconds to wait for completion
+
+        Returns:
+            Number of tasks remaining in queues
+        """
+        if self._async_pipeline is None:
+            return 0
+
+        remaining = self._async_pipeline.stop(wait=wait, timeout=timeout)
+        return remaining
+
+    def wait_for_learning(self, timeout: Optional[float] = None) -> bool:
+        """Wait for all pending learning tasks to complete.
+
+        Args:
+            timeout: Max seconds to wait (None = wait forever)
+
+        Returns:
+            True if all tasks completed, False if timeout
+        """
+        if self._async_pipeline is None:
+            return True
+
+        return self._async_pipeline.wait_for_completion(timeout=timeout)
+
+    @property
+    def learning_stats(self) -> Dict[str, Any]:
+        """Get async learning statistics.
+
+        Returns:
+            Dict with tasks_submitted, reflections_completed, curations_completed,
+            tasks_failed, curator_queue_size, is_running
+        """
+        if self._async_pipeline is None:
+            return {
+                "tasks_submitted": 0,
+                "reflections_completed": 0,
+                "curations_completed": 0,
+                "tasks_failed": 0,
+                "curator_queue_size": 0,
+                "is_running": False,
+            }
+        return self._async_pipeline.stats
+
+    @property
+    def is_async_learning(self) -> bool:
+        """Check if async learning mode is enabled."""
+        return self._async_learning
 
     # ------------------------------------------------------------------ #
     def _reflection_context(self) -> str:
@@ -352,6 +467,59 @@ class AdapterBase:
             step=step_index,
         )
 
+    def _process_sample_async(
+        self,
+        sample: Sample,
+        environment: TaskEnvironment,
+        *,
+        epoch: int,
+        total_epochs: int,
+        step_index: int,
+        total_steps: int,
+    ) -> AdapterStepResult:
+        """Process sample with async learning - Generator returns immediately.
+
+        Learning (Reflector -> Curator -> Playbook) happens in background.
+        """
+        from .async_learning import LearningTask
+
+        # Generate (uses current playbook - eventual consistency)
+        generator_output = self.generator.generate(
+            question=sample.question,
+            context=sample.context,
+            playbook=self.playbook,
+            reflection=self._reflection_context(),
+            sample=sample,
+        )
+
+        # Evaluate (sync - usually fast)
+        env_result = environment.evaluate(sample, generator_output)
+
+        # Submit to async pipeline (Reflector runs in thread pool)
+        if self._async_pipeline:
+            task = LearningTask(
+                sample=sample,
+                generator_output=generator_output,
+                environment_result=env_result,
+                epoch=epoch,
+                step_index=step_index,
+                total_epochs=total_epochs,
+                total_steps=total_steps,
+            )
+            self._async_pipeline.submit(task)
+
+        # Return immediately with partial result
+        return AdapterStepResult(
+            sample=sample,
+            generator_output=generator_output,
+            environment_result=env_result,
+            reflection=None,  # Processing in background
+            curator_output=None,  # Processing in background
+            playbook_snapshot=self.playbook.as_prompt(),
+            epoch=epoch,
+            step=step_index,
+        )
+
 
 class OfflineAdapter(AdapterBase):
     """
@@ -413,6 +581,7 @@ class OfflineAdapter(AdapterBase):
         epochs: int = 1,
         checkpoint_interval: Optional[int] = None,
         checkpoint_dir: Optional[str] = None,
+        wait_for_learning: bool = True,
     ) -> List[AdapterStepResult]:
         """
         Run offline adaptation over training samples.
@@ -423,6 +592,8 @@ class OfflineAdapter(AdapterBase):
             epochs: Number of times to iterate over samples (default: 1)
             checkpoint_interval: Save playbook every N successful samples (optional)
             checkpoint_dir: Directory to save checkpoints (required if checkpoint_interval set)
+            wait_for_learning: If async_learning=True, wait for all learning tasks
+                to complete before returning (default: True)
 
         Returns:
             List of AdapterStepResult for each processed sample
@@ -431,6 +602,8 @@ class OfflineAdapter(AdapterBase):
             The playbook is updated in-place during adaptation.
             Access the evolved playbook via adapter.playbook after running.
             Failed samples are skipped and logged, training continues.
+            In async mode with wait_for_learning=False, learning continues in
+            background. Use wait_for_learning() to block when needed.
         """
         from pathlib import Path
 
@@ -446,55 +619,79 @@ class OfflineAdapter(AdapterBase):
                 "checkpoint_dir must be provided when checkpoint_interval is set"
             )
 
-        for epoch_idx in range(1, epochs + 1):
-            for step_idx, sample in enumerate(samples, start=1):
-                try:
-                    result = self._process_sample(
-                        sample,
-                        environment,
-                        epoch=epoch_idx,
-                        total_epochs=epochs,
-                        step_index=step_idx,
-                        total_steps=total_steps,
-                    )
-                    results.append(result)
+        # Start async pipeline if enabled
+        if self._async_learning:
+            self.start_async_learning()
 
-                    # Save checkpoint if interval reached
-                    if (
-                        checkpoint_interval
-                        and checkpoint_dir
-                        and len(results) % checkpoint_interval == 0
-                    ):
-                        checkpoint_path = Path(checkpoint_dir)
-                        numbered_checkpoint = (
-                            checkpoint_path / f"convex_checkpoint_{len(results)}.json"
+        try:
+            for epoch_idx in range(1, epochs + 1):
+                for step_idx, sample in enumerate(samples, start=1):
+                    try:
+                        # Use async or sync processing based on mode
+                        if self._async_learning:
+                            result = self._process_sample_async(
+                                sample,
+                                environment,
+                                epoch=epoch_idx,
+                                total_epochs=epochs,
+                                step_index=step_idx,
+                                total_steps=total_steps,
+                            )
+                        else:
+                            result = self._process_sample(
+                                sample,
+                                environment,
+                                epoch=epoch_idx,
+                                total_epochs=epochs,
+                                step_index=step_idx,
+                                total_steps=total_steps,
+                            )
+                        results.append(result)
+
+                        # Save checkpoint if interval reached
+                        if (
+                            checkpoint_interval
+                            and checkpoint_dir
+                            and len(results) % checkpoint_interval == 0
+                        ):
+                            checkpoint_path = Path(checkpoint_dir)
+                            numbered_checkpoint = (
+                                checkpoint_path
+                                / f"convex_checkpoint_{len(results)}.json"
+                            )
+                            latest_checkpoint = checkpoint_path / "convex_latest.json"
+
+                            self.playbook.save_to_file(str(numbered_checkpoint))
+                            self.playbook.save_to_file(str(latest_checkpoint))
+                            logger.info(
+                                f"Checkpoint saved: {len(results)} samples → {numbered_checkpoint.name}"
+                            )
+
+                    except Exception as e:
+                        # Log error and continue to next sample
+                        logger.warning(
+                            f"Failed to process sample {step_idx}/{total_steps} "
+                            f"in epoch {epoch_idx}/{epochs}: {type(e).__name__}: {str(e)[:200]}"
                         )
-                        latest_checkpoint = checkpoint_path / "convex_latest.json"
+                        failed_samples.append((epoch_idx, step_idx, str(e)[:100]))
+                        continue
 
-                        self.playbook.save_to_file(str(numbered_checkpoint))
-                        self.playbook.save_to_file(str(latest_checkpoint))
-                        logger.info(
-                            f"Checkpoint saved: {len(results)} samples → {numbered_checkpoint.name}"
-                        )
+            # Report failure summary if any samples failed
+            if failed_samples:
+                logger.info(
+                    f"Training completed with {len(failed_samples)} failed samples "
+                    f"out of {len(samples) * epochs} total attempts"
+                )
+                logger.debug(f"Failed samples: {failed_samples}")
 
-                except Exception as e:
-                    # Log error and continue to next sample
-                    logger.warning(
-                        f"Failed to process sample {step_idx}/{total_steps} "
-                        f"in epoch {epoch_idx}/{epochs}: {type(e).__name__}: {str(e)[:200]}"
-                    )
-                    failed_samples.append((epoch_idx, step_idx, str(e)[:100]))
-                    continue
+            return results
 
-        # Report failure summary if any samples failed
-        if failed_samples:
-            logger.info(
-                f"Training completed with {len(failed_samples)} failed samples "
-                f"out of {len(samples) * epochs} total attempts"
-            )
-            logger.debug(f"Failed samples: {failed_samples}")
-
-        return results
+        finally:
+            # Wait for async learning to complete and stop pipeline
+            if self._async_learning and wait_for_learning:
+                self.wait_for_learning()
+                self.stop_async_learning(wait=True)
+            # If wait_for_learning=False, leave pipeline running for user to manage
 
 
 class OnlineAdapter(AdapterBase):
@@ -551,6 +748,7 @@ class OnlineAdapter(AdapterBase):
         self,
         samples: Iterable[Sample],
         environment: TaskEnvironment,
+        wait_for_learning: bool = True,
     ) -> List[AdapterStepResult]:
         """
         Run online adaptation over a stream of samples.
@@ -558,6 +756,8 @@ class OnlineAdapter(AdapterBase):
         Args:
             samples: Iterable of samples (can be infinite stream)
             environment: Environment for evaluating generator outputs
+            wait_for_learning: If async_learning=True, wait for all learning tasks
+                to complete before returning (default: True)
 
         Returns:
             List of AdapterStepResult for each processed sample
@@ -566,17 +766,42 @@ class OnlineAdapter(AdapterBase):
             - Processes samples sequentially, updating after each one
             - The playbook evolves continuously during processing
             - Can handle infinite streams for continuous deployment
+            - In async mode with wait_for_learning=False, learning continues in
+              background. Use wait_for_learning() to block when needed.
         """
-        results: List[AdapterStepResult] = []
-        step_idx = 0
-        for step_idx, sample in enumerate(samples, start=1):
-            result = self._process_sample(
-                sample,
-                environment,
-                epoch=1,
-                total_epochs=1,
-                step_index=step_idx,
-                total_steps=step_idx,
-            )
-            results.append(result)
-        return results
+        # Start async pipeline if enabled
+        if self._async_learning:
+            self.start_async_learning()
+
+        try:
+            results: List[AdapterStepResult] = []
+            step_idx = 0
+            for step_idx, sample in enumerate(samples, start=1):
+                # Use async or sync processing based on mode
+                if self._async_learning:
+                    result = self._process_sample_async(
+                        sample,
+                        environment,
+                        epoch=1,
+                        total_epochs=1,
+                        step_index=step_idx,
+                        total_steps=step_idx,
+                    )
+                else:
+                    result = self._process_sample(
+                        sample,
+                        environment,
+                        epoch=1,
+                        total_epochs=1,
+                        step_index=step_idx,
+                        total_steps=step_idx,
+                    )
+                results.append(result)
+            return results
+
+        finally:
+            # Wait for async learning to complete and stop pipeline
+            if self._async_learning and wait_for_learning:
+                self.wait_for_learning()
+                self.stop_async_learning(wait=True)
+            # If wait_for_learning=False, leave pipeline running for user to manage

@@ -95,6 +95,47 @@ Instead of dumping the entire playbook into context, ACE uses hybrid retrieval t
 - Prioritizes proven strategies
 - Reduces token costs
 
+### Async Learning Mode
+
+For latency-sensitive applications, ACE supports async learning where the Generator returns immediately while Reflector and Curator process in the background:
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│                       ASYNC LEARNING PIPELINE                         │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  Sample 1 ──► Generator ──► Env ──► Reflector ─┐                     │
+│  Sample 2 ──► Generator ──► Env ──► Reflector ─┼──► Queue ──► Curator │
+│  Sample 3 ──► Generator ──► Env ──► Reflector ─┘         (serialized) │
+│             (parallel)           (parallel)                           │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+**Why this architecture:**
+- **Parallel Reflectors**: Safe to parallelize (read-only analysis, no playbook writes)
+- **Serialized Curator**: Must be sequential (writes to playbook, handles deduplication)
+- **3x faster learning**: Reflector LLM calls run concurrently
+
+**Usage:**
+```python
+adapter = OfflineAdapter(
+    playbook=playbook,
+    generator=generator,
+    reflector=reflector,
+    curator=curator,
+    async_learning=True,        # Enable async mode
+    max_reflector_workers=3,    # Parallel Reflector threads
+)
+
+results = adapter.run(samples, environment)  # Fast - learning in background
+
+# Control methods
+adapter.learning_stats       # Check progress
+adapter.wait_for_learning()  # Block until complete
+adapter.stop_async_learning() # Shutdown pipeline
+```
+
 ---
 
 ## Performance Results

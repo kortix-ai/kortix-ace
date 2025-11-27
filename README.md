@@ -137,6 +137,7 @@ ACE enables agents to learn from execution feedback: what works, what doesn't, a
 - 📈 **20-35% Better Performance**: Proven improvements on complex tasks
 - 🧠 **Self-Improving**: Agents get smarter with each task
 - 🔄 **No Context Collapse**: Preserves valuable knowledge over time
+- ⚡ **Async Learning**: Generator responds instantly while learning happens in background
 - 🚀 **100+ LLM Providers**: Works with OpenAI, Anthropic, Google, and more
 - 📊 **Production Observability**: Built-in Opik integration for enterprise monitoring
 
@@ -265,6 +266,7 @@ Automatically tracks: LLM calls, costs, playbook evolution. View at [comet.com/o
   - [Browser Automation](examples/browser-use/) - Self-improving browser agents
   - [LangChain Integration](examples/langchain/) - Wrap chains/agents with learning
   - [Custom Integration](examples/custom_integration_example.py) - Pattern for any agent
+  - [Async Learning Demo](examples/async_learning_demo.py) - Background learning example
 - [Integration Guide](docs/INTEGRATION_GUIDE.md) - Add ACE to existing agents
 - [ACE Framework Guide](docs/COMPLETE_GUIDE_TO_ACE.md) - Deep dive into Agentic Context Engineering
 - [Prompt Engineering](docs/PROMPT_ENGINEERING.md) - Advanced prompt techniques

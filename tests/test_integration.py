@@ -48,14 +48,41 @@ class MockLLMClient(LLMClient):
                 }
             )
         elif "Reflector" in prompt or "helpful" in prompt.lower():
-            response = json.dumps({"analysis": "Mock analysis", "bullet_tags": []})
+            response = json.dumps(
+                {
+                    "reasoning": "Mock analysis of the outcome",
+                    "error_identification": "",
+                    "root_cause_analysis": "",
+                    "correct_approach": "The correct approach was taken",
+                    "key_insight": "Key insight from this iteration",
+                    "bullet_tags": [],
+                }
+            )
         elif "Curator" in prompt or "delta" in prompt.lower():
-            response = json.dumps({"deltas": []})
+            response = json.dumps(
+                {"delta": {"reasoning": "No changes needed", "operations": []}}
+            )
         else:
             # Generic response
             response = json.dumps({"result": "Mock result"})
 
         return LLMResponse(text=response)
+
+    def complete_structured(self, prompt: str, response_model, **kwargs):
+        """Mock structured output to prevent Instructor wrapping."""
+        from ace.delta import DeltaBatch
+        from ace.roles import CuratorOutput
+
+        response = self.complete(prompt, **kwargs)
+        data = json.loads(response.text)
+
+        # Special handling for CuratorOutput (delta is a dataclass, not Pydantic)
+        if response_model == CuratorOutput:
+            delta_data = data.get("delta", {})
+            delta = DeltaBatch.from_json(delta_data)
+            return CuratorOutput(delta=delta, raw=data)
+
+        return response_model.model_validate(data)
 
 
 class SimpleTestEnvironment(TaskEnvironment):

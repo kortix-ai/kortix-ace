@@ -67,6 +67,22 @@ The playbook stores learned strategies as structured "bullets"—discrete pieces
 4. **Curation:** Curator updates the playbook with delta operations
 5. **Iteration:** Process repeats, playbook grows more refined over time
 
+### Insight Levels
+
+The Reflector can analyze execution at three different levels of scope, producing insights of varying depth:
+
+| Level | Scope | What's Analyzed | Learning Quality |
+|-------|-------|-----------------|------------------|
+| **Micro** | Single interaction | Request → response → feedback | Fast, basic patterns |
+| **Meso** | Full agent run | Multiple steps with reasoning traces | Rich, nuanced strategies |
+| **Macro** | Cross-run analysis | Patterns across multiple executions | Comprehensive (future) |
+
+**Micro-level insights** come from single request/response cycles. Good for simple tasks but limited context.
+
+**Meso-level insights** come from full agent runs with intermediate steps—including the agent's thoughts, tool calls, and observations. This produces the richest learning because the Reflector sees the full reasoning trace, not just the final answer.
+
+**Macro-level insights** (future) will compare patterns across multiple runs to identify systemic improvements.
+
 ---
 
 ## Key Technical Innovations

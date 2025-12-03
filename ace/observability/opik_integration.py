@@ -151,11 +151,6 @@ class OpikIntegration:
         except Exception as e:
             logger.error(f"Failed to log skill evolution: {e}")
 
-    # Backward compatibility alias
-    def log_bullet_evolution(self, *args, **kwargs) -> None:
-        """Deprecated: Use log_skill_evolution instead."""
-        return self.log_skill_evolution(*args, **kwargs)
-
     def log_skillbook_update(
         self,
         operation_type: str,
@@ -190,11 +185,6 @@ class OpikIntegration:
             )
         except Exception as e:
             logger.error(f"Failed to log skillbook update: {e}")
-
-    # Backward compatibility alias
-    def log_playbook_update(self, *args, **kwargs) -> None:
-        """Deprecated: Use log_skillbook_update instead."""
-        return self.log_skillbook_update(*args, **kwargs)
 
     def log_role_performance(
         self,

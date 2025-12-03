@@ -841,13 +841,6 @@ class PromptManager:
 
         return prompt
 
-    # Backward compatibility alias
-    def get_generator_prompt(
-        self, domain: Optional[str] = None, version: Optional[str] = None
-    ) -> str:
-        """Deprecated: Use get_agent_prompt instead."""
-        return self.get_agent_prompt(domain=domain, version=version)
-
     def get_reflector_prompt(self, version: Optional[str] = None) -> str:
         """Get reflector prompt for specific version."""
         version = version or self.default_version
@@ -895,11 +888,6 @@ class PromptManager:
             raise ValueError(f"No skill manager prompt found for version {version}")
 
         return prompt
-
-    # Backward compatibility alias
-    def get_curator_prompt(self, version: Optional[str] = None) -> str:
-        """Deprecated: Use get_skill_manager_prompt instead."""
-        return self.get_skill_manager_prompt(version=version)
 
     def _track_usage(self, prompt_id: str) -> None:
         """Track prompt usage for analysis."""

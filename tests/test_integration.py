@@ -38,8 +38,28 @@ class MockLLMClient(LLMClient):
         """Return valid JSON based on prompt type."""
         self.call_count += 1
 
-        # Detect role from prompt
-        if "Generator" in prompt or "bullet_ids" in prompt:
+        # Detect role from prompt - check more specific markers first
+        # v2.1 prompts use "ACE Reflector", "ACE Curator", "ACE Generator"
+        if "ACE Reflector" in prompt or "Reflector" in prompt:
+            response = json.dumps(
+                {
+                    "reasoning": "Mock analysis of the outcome",
+                    "error_identification": "",
+                    "root_cause_analysis": "",
+                    "correct_approach": "The correct approach was taken",
+                    "key_insight": "Key insight from this iteration",
+                    "bullet_tags": [],
+                }
+            )
+        elif (
+            "ACE Curator" in prompt or "Curator" in prompt or "delta" in prompt.lower()
+        ):
+            response = json.dumps(
+                {"delta": {"reasoning": "No changes needed", "operations": []}}
+            )
+        elif (
+            "ACE Generator" in prompt or "Generator" in prompt or "bullet_ids" in prompt
+        ):
             response = json.dumps(
                 {
                     "reasoning": "Mock reasoning",
@@ -47,15 +67,31 @@ class MockLLMClient(LLMClient):
                     "bullet_ids": [],
                 }
             )
-        elif "Reflector" in prompt or "helpful" in prompt.lower():
-            response = json.dumps({"analysis": "Mock analysis", "bullet_tags": []})
-        elif "Curator" in prompt or "delta" in prompt.lower():
-            response = json.dumps({"deltas": []})
+        elif "helpful" in prompt.lower():
+            response = json.dumps(
+                {"delta": {"reasoning": "No changes needed", "operations": []}}
+            )
         else:
             # Generic response
             response = json.dumps({"result": "Mock result"})
 
         return LLMResponse(text=response)
+
+    def complete_structured(self, prompt: str, response_model, **kwargs):
+        """Mock structured output to prevent Instructor wrapping."""
+        from ace.delta import DeltaBatch
+        from ace.roles import CuratorOutput
+
+        response = self.complete(prompt, **kwargs)
+        data = json.loads(response.text)
+
+        # Special handling for CuratorOutput (delta is a dataclass, not Pydantic)
+        if response_model == CuratorOutput:
+            delta_data = data.get("delta", {})
+            delta = DeltaBatch.from_json(delta_data)
+            return CuratorOutput(delta=delta, raw=data)
+
+        return response_model.model_validate(data)
 
 
 class SimpleTestEnvironment(TaskEnvironment):

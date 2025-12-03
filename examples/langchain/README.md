@@ -38,18 +38,18 @@ python simple_chain_example.py
 
 ### 2. agent_with_tools_example.py
 
-Shows how to integrate ACE with LangChain agents using tools.
+Shows how to use ACE with LangChain AgentExecutor for **meso-level learning**.
 
 **Features:**
-- Agent with custom tools (add, multiply, word length)
-- Multi-step reasoning patterns
-- String and dict input formats
-- Learning from failures
-- Async agent execution
+- Real AgentExecutor with tool-calling agent
+- **Meso-level learning** - captures full reasoning traces
+- Comparison of micro vs meso learning
+- Async AgentExecutor execution
 
 **Requirements:**
 ```bash
 pip install ace-framework[langchain]
+# or: pip install langchain langchain-openai
 ```
 
 **Usage:**
@@ -59,11 +59,38 @@ python agent_with_tools_example.py
 ```
 
 **What you'll see:**
-- The agent uses tools to solve problems
-- ACE learns tool usage patterns
-- Strategies are saved to `agent_with_tools_learned.json`
+- AgentExecutor reasoning with tool calls (verbose output)
+- ACE learning from full execution trace (thoughts, actions, observations)
+- Comparison showing richer learning with meso vs micro
+- Strategies saved to `agent_executor_learned.json`
 
 ## Key Concepts
+
+### Insight Levels (Micro vs Meso)
+
+ACE learns at different levels depending on the setup:
+
+| Level | Context | What ACE Sees | Use Case |
+|-------|---------|---------------|----------|
+| **Micro** | With TaskEnvironment | Request → response → ground truth/feedback | OfflineAdapter, OnlineAdapter |
+| **Meso** | AgentExecutor | Thoughts → tool calls → observations → answer | ACELangChain with agents |
+
+**Micro-level** (full ACE loop): Uses TaskEnvironment with ground truth to evaluate correctness. The Reflector learns from whether the answer was right or wrong.
+
+**Meso-level** (AgentExecutor): ACE captures the full reasoning trace (thoughts, tool calls, observations) without external ground truth. Learns from execution patterns.
+
+```python
+# Micro: Full ACE loop with environment
+adapter = OfflineAdapter(playbook, generator, reflector, curator)
+adapter.run(samples, environment)  # Micro learning with ground truth
+
+# Meso: AgentExecutor reasoning trace (automatic!)
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+ace_agent = ACELangChain(runnable=agent_executor)  # Meso learning
+result = ace_agent.invoke({"input": "question"})
+```
+
+ACE **automatically detects** AgentExecutor and enables meso-level trace extraction.
 
 ### The ACE Learning Pattern
 

@@ -3,14 +3,27 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from .delta import DeltaBatch
 from .llm import LLMClient
 from .playbook import Playbook
-from .prompts import CURATOR_PROMPT, GENERATOR_PROMPT, REFLECTOR_PROMPT
+from .prompts_v2_1 import PromptManager
+
+# Use PromptManager to get v2.1 prompts with {current_date} filled in
+_prompt_manager = PromptManager(default_version="2.1")
+GENERATOR_PROMPT = _prompt_manager.get_generator_prompt()
+REFLECTOR_PROMPT = _prompt_manager.get_reflector_prompt()
+CURATOR_PROMPT = _prompt_manager.get_curator_prompt()
+
+if TYPE_CHECKING:
+    from .deduplication import DeduplicationManager
+
+logger = logging.getLogger(__name__)
 
 # Import Opik tracing with graceful degradation
 try:
@@ -107,12 +120,19 @@ def extract_cited_bullet_ids(text: str) -> List[str]:
     return list(dict.fromkeys(matches))
 
 
-@dataclass
-class GeneratorOutput:
-    reasoning: str
-    final_answer: str
-    bullet_ids: List[str]
-    raw: Dict[str, Any]
+class GeneratorOutput(BaseModel):
+    """Output from the Generator role containing reasoning and answer."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    reasoning: str = Field(..., description="Step-by-step reasoning process")
+    final_answer: str = Field(..., description="The final answer to the question")
+    bullet_ids: List[str] = Field(
+        default_factory=list, description="IDs of strategies cited in reasoning"
+    )
+    raw: Dict[str, Any] = Field(
+        default_factory=dict, description="Raw LLM response data"
+    )
 
 
 class Generator:
@@ -125,8 +145,7 @@ class Generator:
     Args:
         llm: The LLM client to use for generation
         prompt_template: Custom prompt template (uses GENERATOR_PROMPT by default)
-        max_retries: Maximum attempts if JSON parsing fails (default: 3)
-        retry_prompt: Additional instruction appended on retry for JSON failures (default: English JSON reminder)
+        max_retries: Maximum validation retries via Instructor (default: 3)
 
     Example:
         >>> from ace import Generator, LiteLLMClient, Playbook
@@ -159,12 +178,18 @@ class Generator:
         prompt_template: str = GENERATOR_PROMPT,
         *,
         max_retries: int = 3,
-        retry_prompt: str = "\n\nIMPORTANT: Return ONLY a single valid JSON object. Escape all quotes properly or use single quotes. Do not include any additional text outside the JSON.",
     ) -> None:
-        self.llm = llm
+        # Auto-wrap with Instructor if not already wrapped
+        # Use duck typing to detect Instructor capability (supports mocking)
+        if hasattr(llm, "complete_structured"):
+            self.llm = llm
+        else:
+            from .llm_providers.instructor_client import wrap_with_instructor
+
+            self.llm = wrap_with_instructor(llm, max_retries=max_retries)  # type: ignore[assignment]
+
         self.prompt_template = prompt_template
         self.max_retries = max_retries
-        self.retry_prompt = retry_prompt
 
     @maybe_track(
         name="generator_generate",
@@ -216,36 +241,16 @@ class Generator:
             question=question,
             context=_format_optional(context),
         )
-        prompt = base_prompt
-        last_error: Optional[Exception] = None
 
         # Filter out non-LLM kwargs (like 'sample' used for ReplayGenerator)
         llm_kwargs = {k: v for k, v in kwargs.items() if k != "sample"}
 
-        for attempt in range(self.max_retries):
-            response = self.llm.complete(prompt, **llm_kwargs)
-            try:
-                data = _safe_json_loads(response.text)
-                reasoning = str(data.get("reasoning", ""))
-                final_answer = str(data.get("final_answer", ""))
-
-                # Extract bullet IDs from reasoning citations
-                bullet_ids = extract_cited_bullet_ids(reasoning)
-
-                return GeneratorOutput(
-                    reasoning=reasoning,
-                    final_answer=final_answer,
-                    bullet_ids=bullet_ids,
-                    raw=data,
-                )
-            except ValueError as err:
-                last_error = err
-                if attempt + 1 >= self.max_retries:
-                    break
-                # Append retry instruction to help LLM produce valid JSON
-                # Configurable via retry_prompt parameter (supports different languages/models)
-                prompt = base_prompt + self.retry_prompt
-        raise RuntimeError("Generator failed to produce valid JSON.") from last_error
+        # Use Instructor for automatic validation (always available - core dependency)
+        output = self.llm.complete_structured(
+            base_prompt, GeneratorOutput, **llm_kwargs
+        )
+        output.bullet_ids = extract_cited_bullet_ids(output.reasoning)
+        return output
 
 
 class ReplayGenerator:
@@ -433,21 +438,54 @@ class ReplayGenerator:
         )
 
 
-@dataclass
-class BulletTag:
-    id: str
-    tag: str
+class ExtractedLearning(BaseModel):
+    """A single learning extracted by the Reflector from task execution."""
+
+    learning: str = Field(..., description="The extracted learning or insight")
+    atomicity_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="How atomic/focused this learning is"
+    )
+    evidence: str = Field(
+        default="", description="Evidence from execution supporting this learning"
+    )
 
 
-@dataclass
-class ReflectorOutput:
-    reasoning: str
-    error_identification: str
-    root_cause_analysis: str
-    correct_approach: str
-    key_insight: str
-    bullet_tags: List[BulletTag]
-    raw: Dict[str, Any]
+class BulletTag(BaseModel):
+    """Classification tag for a bullet strategy (helpful/harmful/neutral)."""
+
+    id: str = Field(..., description="The bullet ID being tagged")
+    tag: str = Field(
+        ..., description="Classification: 'helpful', 'harmful', or 'neutral'"
+    )
+
+
+class ReflectorOutput(BaseModel):
+    """Output from the Reflector role containing analysis and bullet classifications."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    reasoning: str = Field(..., description="Overall reasoning about the outcome")
+    error_identification: str = Field(
+        default="", description="Description of what went wrong (if applicable)"
+    )
+    root_cause_analysis: str = Field(
+        default="", description="Analysis of why errors occurred"
+    )
+    correct_approach: str = Field(
+        ..., description="What the correct approach should be"
+    )
+    key_insight: str = Field(
+        ..., description="The main lesson learned from this iteration"
+    )
+    extracted_learnings: List[ExtractedLearning] = Field(
+        default_factory=list, description="Learnings extracted from task execution"
+    )
+    bullet_tags: List[BulletTag] = Field(
+        default_factory=list, description="Classifications of strategy effectiveness"
+    )
+    raw: Dict[str, Any] = Field(
+        default_factory=dict, description="Raw LLM response data"
+    )
 
 
 class Reflector:
@@ -461,8 +499,7 @@ class Reflector:
     Args:
         llm: The LLM client to use for reflection
         prompt_template: Custom prompt template (uses REFLECTOR_PROMPT by default)
-        max_retries: Maximum attempts if JSON parsing fails (default: 3)
-        retry_prompt: Additional instruction appended on retry for JSON failures (default: English JSON reminder)
+        max_retries: Maximum validation retries via Instructor (default: 3)
 
     Example:
         >>> from ace import Reflector, LiteLLMClient
@@ -487,12 +524,18 @@ class Reflector:
         prompt_template: str = REFLECTOR_PROMPT,
         *,
         max_retries: int = 3,
-        retry_prompt: str = "\n\nIMPORTANT: Return ONLY a single valid JSON object. Escape all quotes properly or use single quotes. Do not include any additional text outside the JSON.",
     ) -> None:
-        self.llm = llm
+        # Auto-wrap with Instructor if not already wrapped
+        # Use duck typing to detect Instructor capability (supports mocking)
+        if hasattr(llm, "complete_structured"):
+            self.llm = llm
+        else:
+            from .llm_providers.instructor_client import wrap_with_instructor
+
+            self.llm = wrap_with_instructor(llm, max_retries=max_retries)  # type: ignore[assignment]
+
         self.prompt_template = prompt_template
         self.max_retries = max_retries
-        self.retry_prompt = retry_prompt
 
     @maybe_track(
         name="reflector_reflect",
@@ -545,65 +588,25 @@ class Reflector:
             feedback=_format_optional(feedback),
             playbook_excerpt=playbook_context,
         )
-        result: Optional[ReflectorOutput] = None
-        prompt = base_prompt
-        last_error: Optional[Exception] = None
 
         # Filter out non-LLM kwargs (like 'sample' used for ReplayGenerator)
         llm_kwargs = {k: v for k, v in kwargs.items() if k != "sample"}
 
-        for round_idx in range(max_refinement_rounds):
-            prompt = base_prompt
-            for attempt in range(self.max_retries):
-                response = self.llm.complete(
-                    prompt, refinement_round=round_idx, **llm_kwargs
-                )
-                try:
-                    data = _safe_json_loads(response.text)
-                    bullet_tags: List[BulletTag] = []
-                    tags_payload = data.get("bullet_tags", [])
-                    if isinstance(tags_payload, Sequence):
-                        for item in tags_payload:
-                            if (
-                                isinstance(item, dict)
-                                and "id" in item
-                                and "tag" in item
-                            ):
-                                bullet_tags.append(
-                                    BulletTag(
-                                        id=str(item["id"]), tag=str(item["tag"]).lower()
-                                    )
-                                )
-                    candidate = ReflectorOutput(
-                        reasoning=str(data.get("reasoning", "")),
-                        error_identification=str(data.get("error_identification", "")),
-                        root_cause_analysis=str(data.get("root_cause_analysis", "")),
-                        correct_approach=str(data.get("correct_approach", "")),
-                        key_insight=str(data.get("key_insight", "")),
-                        bullet_tags=bullet_tags,
-                        raw=data,
-                    )
-                    result = candidate
-                    # Early exit if we already have actionable output
-                    if bullet_tags or candidate.key_insight:
-                        return candidate
-                    break
-                except ValueError as err:
-                    last_error = err
-                    if attempt + 1 >= self.max_retries:
-                        break
-                    # Append retry instruction to help LLM produce valid JSON
-                    # Configurable via retry_prompt parameter (supports different languages/models)
-                    prompt = base_prompt + self.retry_prompt
-        if result is None:
-            raise RuntimeError("Reflector failed to produce a result.") from last_error
-        return result
+        # Use Instructor for automatic validation (always available - core dependency)
+        return self.llm.complete_structured(base_prompt, ReflectorOutput, **llm_kwargs)
 
 
-@dataclass
-class CuratorOutput:
-    delta: DeltaBatch
-    raw: Dict[str, Any]
+class CuratorOutput(BaseModel):
+    """Output from the Curator role containing playbook update operations."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    delta: DeltaBatch = Field(
+        ..., description="Batch of delta operations to apply to playbook"
+    )
+    raw: Dict[str, Any] = Field(
+        default_factory=dict, description="Raw LLM response data"
+    )
 
 
 class Curator:
@@ -617,8 +620,8 @@ class Curator:
     Args:
         llm: The LLM client to use for curation
         prompt_template: Custom prompt template (uses CURATOR_PROMPT by default)
-        max_retries: Maximum attempts if JSON parsing fails (default: 3)
-        retry_prompt: Additional instruction appended on retry for JSON failures (default: English JSON reminder)
+        max_retries: Maximum validation retries via Instructor (default: 3)
+        dedup_manager: Optional DeduplicationManager for bullet deduplication
 
     Example:
         >>> from ace import Curator, LiteLLMClient
@@ -635,6 +638,13 @@ class Curator:
         >>> # Apply the delta to update playbook
         >>> playbook.apply_delta(output.delta)
 
+    With Deduplication:
+        >>> from ace.deduplication import DeduplicationManager, DeduplicationConfig
+        >>> dedup_manager = DeduplicationManager(DeduplicationConfig())
+        >>> curator = Curator(client, dedup_manager=dedup_manager)
+        >>> # Curator will now include similarity reports in prompts
+        >>> # and handle MERGE/DELETE/KEEP/UPDATE consolidation operations
+
     Custom Prompt Example:
         >>> custom_prompt = '''
         ... Progress: {progress}
@@ -642,6 +652,7 @@ class Curator:
         ... Reflection: {reflection}
         ... Playbook: {playbook}
         ... Context: {question_context}
+        ... Similarity Report: {similarity_report}
         ... Decide what changes to make. Return JSON with delta operations.
         ... '''
         >>> curator = Curator(client, prompt_template=custom_prompt)
@@ -651,6 +662,12 @@ class Curator:
         - UPDATE: Modify existing bullets
         - TAG: Update helpful/harmful counts
         - REMOVE: Delete unhelpful bullets
+
+    With deduplication enabled, also handles ConsolidationOperations:
+        - MERGE: Combine similar bullets
+        - DELETE: Soft-delete redundant bullets
+        - KEEP: Mark similar bullets as intentionally separate
+        - UPDATE: Refine content to differentiate similar bullets
     """
 
     def __init__(
@@ -659,12 +676,20 @@ class Curator:
         prompt_template: str = CURATOR_PROMPT,
         *,
         max_retries: int = 3,
-        retry_prompt: str = "\n\nIMPORTANT: Return ONLY a single valid JSON object. The JSON must be complete with ALL required fields:\n- reasoning (string)\n- deduplication_check (object)\n- operations (array)\n- quality_metrics (object with avg_atomicity, operations_count, estimated_impact)\nEscape all quotes properly and ensure the JSON is complete and well-formed.",
+        dedup_manager: Optional["DeduplicationManager"] = None,
     ) -> None:
-        self.llm = llm
+        # Auto-wrap with Instructor if not already wrapped
+        # Use duck typing to detect Instructor capability (supports mocking)
+        if hasattr(llm, "complete_structured"):
+            self.llm = llm
+        else:
+            from .llm_providers.instructor_client import wrap_with_instructor
+
+            self.llm = wrap_with_instructor(llm, max_retries=max_retries)  # type: ignore[assignment]
+
         self.prompt_template = prompt_template
         self.max_retries = max_retries
-        self.retry_prompt = retry_prompt
+        self.dedup_manager = dedup_manager
 
     @maybe_track(
         name="curator_curate",
@@ -700,6 +725,11 @@ class Curator:
         """
         Generate delta operations to update the playbook based on reflection.
 
+        If a DeduplicationManager is configured, this method will:
+        1. Generate a similarity report for similar bullet pairs
+        2. Include the report in the prompt for the Curator to handle
+        3. Parse and apply consolidation operations from the response
+
         Args:
             reflection: The Reflector's analysis of what went right/wrong
             playbook: Current playbook to potentially update
@@ -713,33 +743,52 @@ class Curator:
         Raises:
             RuntimeError: If unable to produce valid JSON after max_retries
         """
+        # Get similarity report if deduplication is enabled
+        similarity_report = None
+        if self.dedup_manager is not None:
+            similarity_report = self.dedup_manager.get_similarity_report(playbook)
+            if similarity_report:
+                logger.info("Including similarity report in Curator prompt")
+
+        # Serialize reflection with all meaningful fields (not just empty 'raw')
+        reflection_data = {
+            "reasoning": reflection.reasoning,
+            "error_identification": reflection.error_identification,
+            "root_cause_analysis": reflection.root_cause_analysis,
+            "correct_approach": reflection.correct_approach,
+            "key_insight": reflection.key_insight,
+            "extracted_learnings": [
+                l.model_dump() for l in reflection.extracted_learnings
+            ],
+        }
+
         base_prompt = self.prompt_template.format(
             progress=progress,
             stats=json.dumps(playbook.stats()),
-            reflection=json.dumps(reflection.raw, ensure_ascii=False, indent=2),
+            reflection=json.dumps(reflection_data, ensure_ascii=False, indent=2),
             playbook=playbook.as_prompt() or "(empty playbook)",
             question_context=question_context,
         )
-        prompt = base_prompt
-        last_error: Optional[Exception] = None
+
+        # Append similarity report if available
+        if similarity_report:
+            base_prompt = base_prompt + "\n\n" + similarity_report
 
         # Filter out non-LLM kwargs (like 'sample' used for ReplayGenerator)
         llm_kwargs = {k: v for k, v in kwargs.items() if k != "sample"}
 
-        for attempt in range(self.max_retries):
-            response = self.llm.complete(prompt, **llm_kwargs)
-            try:
-                data = _safe_json_loads(response.text)
-                delta = DeltaBatch.from_json(data)
-                return CuratorOutput(delta=delta, raw=data)
-            except ValueError as err:
-                last_error = err
-                if attempt + 1 >= self.max_retries:
-                    break
-                # Append retry instruction to help LLM produce valid JSON
-                # Configurable via retry_prompt parameter (supports different languages/models)
-                prompt = base_prompt + self.retry_prompt
-        raise RuntimeError("Curator failed to produce valid JSON.") from last_error
+        # Use Instructor for automatic validation (always available - core dependency)
+        output = self.llm.complete_structured(base_prompt, CuratorOutput, **llm_kwargs)
+
+        # Apply consolidation operations if deduplication is enabled
+        if self.dedup_manager is not None and output.raw:
+            applied_ops = self.dedup_manager.apply_operations_from_response(
+                output.raw, playbook
+            )
+            if applied_ops:
+                logger.info(f"Applied {len(applied_ops)} consolidation operations")
+
+        return output
 
 
 def _make_playbook_excerpt(playbook: Playbook, bullet_ids: Sequence[str]) -> str:

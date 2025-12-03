@@ -14,13 +14,13 @@ logger = logging.getLogger(__name__)
 # Type variable for decorated functions
 F = TypeVar("F", bound=Callable[..., Any])
 
-# Flag to check if Opik is available
-_OPIK_AVAILABLE = False
+# Flag to check if Opik is installed (importable)
+_OPIK_INSTALLED = False
 try:
     import opik
     from opik import track
 
-    _OPIK_AVAILABLE = True
+    _OPIK_INSTALLED = True
 except ImportError:
     pass
 
@@ -29,7 +29,11 @@ def maybe_track(
     name: Optional[str] = None, tags: Optional[list[str]] = None, **kwargs: Any
 ) -> Callable[[F], F]:
     """
-    Conditionally apply @opik.track decorator if Opik is available.
+    Conditionally apply @opik.track decorator if Opik is available and enabled.
+
+    Respects environment variables:
+    - OPIK_ENABLED=false (or 0/no) - disables tracing
+    - OPIK_DISABLED=true (or 1/yes) - disables tracing
 
     Args:
         name: Name for the trace
@@ -38,7 +42,15 @@ def maybe_track(
     """
 
     def decorator(func: F) -> F:
-        if not _OPIK_AVAILABLE:
+        # First check: is Opik installed?
+        if not _OPIK_INSTALLED:
+            return func
+
+        # Second check: is Opik disabled via environment variable?
+        # Import here to avoid circular import at module load time
+        from .opik_integration import _should_skip_opik
+
+        if _should_skip_opik():
             return func
 
         try:

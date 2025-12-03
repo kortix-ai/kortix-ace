@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """
-ACE + Browser-Use Domain Checker Demo
+ACE + Browser-Use Domain Checker Demo (ASYNCHRONOUS LEARNING)
 
-Simple demo showing ACE learning to improve at checking domain availability.
-Uses the new ACEAgent integration for clean, automatic learning.
+This version uses ASYNCHRONOUS learning - the Reflector and Curator run in the
+BACKGROUND while browser tasks continue executing (non-blocking).
+
+Behavior:
+- Domain 1 finishes → Learning starts in background → Domain 2 starts IMMEDIATELY
+- Domain 2 may NOT have Domain 1's learning yet (still processing)
+- Faster overall execution, learning happens in parallel
+- Must call wait_for_learning() before saving playbook
+
+See ace_domain_checker_sync.py for the sync (blocking) version.
 """
 
 import asyncio

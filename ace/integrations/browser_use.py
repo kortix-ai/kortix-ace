@@ -20,7 +20,7 @@ Example:
 """
 
 import asyncio
-from typing import Optional, Any, Callable, List
+from typing import TYPE_CHECKING, Optional, Any, Callable, Dict, List
 from pathlib import Path
 
 try:
@@ -29,14 +29,17 @@ try:
     BROWSER_USE_AVAILABLE = True
 except ImportError:
     BROWSER_USE_AVAILABLE = False
-    Agent = None
-    Browser = None
+    Agent = None  # type: ignore[misc,assignment]
+    Browser = None  # type: ignore[misc,assignment]
 
 from ..llm_providers import LiteLLMClient
 from ..playbook import Playbook
 from ..roles import Reflector, Curator, GeneratorOutput
 from ..prompts_v2_1 import PromptManager
 from .base import wrap_playbook_context
+
+if TYPE_CHECKING:
+    from ..deduplication import DeduplicationConfig
 
 
 class ACEAgent:
@@ -52,6 +55,11 @@ class ACEAgent:
     - No ACE Generator (browser-use executes directly)
     - Playbook provides context only
     - Reflector + Curator run AFTER execution
+
+    Insight Level: Meso
+        ACE sees the full browser execution trace (thoughts, actions, observations)
+        without external ground truth. Learns from execution patterns rather than
+        correctness feedback. See docs/COMPLETE_GUIDE_TO_ACE.md for details.
 
     Usage:
         # Simple usage
@@ -94,6 +102,8 @@ class ACEAgent:
         playbook: Optional[Playbook] = None,
         playbook_path: Optional[str] = None,
         is_learning: bool = True,
+        async_learning: bool = False,
+        dedup_config: Optional["DeduplicationConfig"] = None,
         **agent_kwargs,
     ):
         """
@@ -112,6 +122,9 @@ class ACEAgent:
             playbook: Existing Playbook instance
             playbook_path: Path to load playbook from
             is_learning: Enable/disable ACE learning
+            async_learning: If True, learning happens in background (non-blocking).
+                Use wait_for_learning() before saving playbook.
+            dedup_config: Optional DeduplicationConfig for bullet deduplication
             **agent_kwargs: Additional browser-use Agent parameters
                 (max_steps, use_vision, step_timeout, max_failures, etc.)
         """
@@ -125,7 +138,11 @@ class ACEAgent:
         self.browser_llm = llm
         self.browser = browser
         self.is_learning = is_learning
+        self._async_learning = async_learning
         self.agent_kwargs = agent_kwargs
+
+        # Async learning task tracking
+        self._learning_tasks: List[asyncio.Task] = []
 
         # Always create playbook and ACE components
         # (but only use them if is_learning=True)
@@ -148,8 +165,18 @@ class ACEAgent:
         self.reflector = Reflector(
             self.ace_llm, prompt_template=prompt_mgr.get_reflector_prompt()
         )
+
+        # Create DeduplicationManager if config provided
+        dedup_manager = None
+        if dedup_config is not None:
+            from ..deduplication import DeduplicationManager
+
+            dedup_manager = DeduplicationManager(dedup_config)
+
         self.curator = Curator(
-            self.ace_llm, prompt_template=prompt_mgr.get_curator_prompt()
+            self.ace_llm,
+            prompt_template=prompt_mgr.get_curator_prompt(),
+            dedup_manager=dedup_manager,
         )
 
     async def run(
@@ -215,7 +242,17 @@ class ACEAgent:
 
             # Learn from successful execution (only if is_learning=True)
             if self.is_learning:
-                await self._learn_from_execution(current_task, history, success=True)
+                if self._async_learning:
+                    # Fire and forget - learning in background
+                    learning_task = asyncio.create_task(
+                        self._learn_from_execution(current_task, history, success=True)
+                    )
+                    self._learning_tasks.append(learning_task)
+                else:
+                    # Sync mode - wait for learning
+                    await self._learn_from_execution(
+                        current_task, history, success=True
+                    )
 
             return history
 
@@ -223,12 +260,23 @@ class ACEAgent:
             error = str(e)
             # Learn from failure too (only if is_learning=True)
             if self.is_learning:
-                await self._learn_from_execution(
-                    current_task,
-                    history if "history" in locals() else None,
-                    success=False,
-                    error=error,
-                )
+                if self._async_learning:
+                    learning_task = asyncio.create_task(
+                        self._learn_from_execution(
+                            current_task,
+                            history if "history" in locals() else None,
+                            success=False,
+                            error=error,
+                        )
+                    )
+                    self._learning_tasks.append(learning_task)
+                else:
+                    await self._learn_from_execution(
+                        current_task,
+                        history if "history" in locals() else None,
+                        success=False,
+                        error=error,
+                    )
             raise
 
     def _build_rich_feedback(
@@ -441,8 +489,11 @@ class ACEAgent:
 
         Flow: Reflector → Curator → Update Playbook
         (No Generator - browser-use already executed)
+
+        Uses asyncio.to_thread() to run sync LLM calls in a thread pool,
+        preventing event loop blocking when async_learning=True.
         """
-        # Extract rich trace information
+        # Extract rich trace information (fast, no LLM calls)
         trace_info = self._build_rich_feedback(history, success, error)
 
         # Extract cited bullet IDs from agent thoughts (clean, no tool noise)
@@ -456,6 +507,32 @@ class ACEAgent:
             if self.playbook.get_bullet(bullet_id) is not None
         ]
 
+        # Run sync learning in thread pool (doesn't block event loop)
+        await asyncio.to_thread(
+            self._sync_learn,
+            task,
+            trace_info,
+            valid_cited_ids,
+            cited_ids,
+            success,
+            error,
+        )
+
+    def _sync_learn(
+        self,
+        task: str,
+        trace_info: Dict[str, Any],
+        valid_cited_ids: List[str],
+        cited_ids: List[str],
+        success: bool,
+        error: Optional[str],
+    ):
+        """
+        Synchronous learning logic (runs in thread pool).
+
+        This method contains the actual LLM calls (Reflector + Curator)
+        which are synchronous and would block the event loop if called directly.
+        """
         # Create GeneratorOutput (browser executed, not ACE Generator)
         # This is a "fake" output to satisfy Reflector's interface
         # IMPORTANT: Pass full trace as reasoning so Reflector can analyze agent's thoughts
@@ -483,7 +560,7 @@ class ACEAgent:
         if error:
             feedback_summary += f"\nError: {error}"
 
-        # Run Reflector
+        # Run Reflector (sync LLM call)
         reflection = self.reflector.reflect(
             question=task,
             generator_output=generator_output,
@@ -492,7 +569,7 @@ class ACEAgent:
             feedback=feedback_summary,
         )
 
-        # Run Curator with enriched context
+        # Run Curator with enriched context (sync LLM call)
         curator_output = self.curator.curate(
             reflection=reflection,
             playbook=self.playbook,
@@ -516,6 +593,63 @@ class ACEAgent:
     def disable_learning(self):
         """Disable ACE learning (execution only, no updates to playbook)."""
         self.is_learning = False
+
+    # -----------------------------------------------------------------------
+    # Async Learning Control
+    # -----------------------------------------------------------------------
+
+    async def wait_for_learning(self, timeout: Optional[float] = None) -> bool:
+        """Wait for all background learning tasks to complete.
+
+        Args:
+            timeout: Max seconds to wait (None = wait forever)
+
+        Returns:
+            True if all tasks completed, False if timeout
+        """
+        if not self._learning_tasks:
+            return True
+
+        # Clean up completed tasks first
+        self._learning_tasks = [t for t in self._learning_tasks if not t.done()]
+
+        if not self._learning_tasks:
+            return True
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*self._learning_tasks, return_exceptions=True),
+                timeout=timeout,
+            )
+            self._learning_tasks.clear()
+            return True
+        except asyncio.TimeoutError:
+            return False
+
+    @property
+    def learning_stats(self) -> Dict[str, Any]:
+        """Get learning progress statistics.
+
+        Returns:
+            Dict with tasks_submitted, pending, completed counts
+        """
+        # Clean up completed tasks
+        pending = [t for t in self._learning_tasks if not t.done()]
+        completed = len(self._learning_tasks) - len(pending)
+
+        return {
+            "tasks_submitted": len(self._learning_tasks),
+            "pending": len(pending),
+            "completed": completed,
+            "async_learning": self._async_learning,
+        }
+
+    def stop_async_learning(self):
+        """Cancel all pending learning tasks."""
+        for task in self._learning_tasks:
+            if not task.done():
+                task.cancel()
+        self._learning_tasks.clear()
 
     def save_playbook(self, path: str):
         """Save learned playbook to file."""

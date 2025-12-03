@@ -36,17 +36,18 @@ from ace import Sample, SimpleEnvironment
 
 load_dotenv()
 
+
 def main():
     print("=" * 60)
     print("ACELiteLLM Learning Example")
     print("=" * 60)
 
     # Check for API key
-    if not os.getenv("OPENAI_API_KEY"):
-        print("ERROR: Please set OPENAI_API_KEY environment variable")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("ERROR: Please set ANTHROPIC_API_KEY environment variable")
         print("\nSetup instructions:")
-        print("1. Get an API key from https://platform.openai.com/api-keys")
-        print("2. export OPENAI_API_KEY='your-api-key'")
+        print("1. Get an API key from https://console.anthropic.com/")
+        print("2. export ANTHROPIC_API_KEY='your-api-key'")
         print("3. Run this script again")
         return
 
@@ -58,10 +59,10 @@ def main():
     # Create ACELiteLLM agent
     # Note: Change model for different providers (see docstring for examples)
     agent = ACELiteLLM(
-        model="gpt-4o-mini",  # Fast, cost-effective OpenAI model
-        max_tokens=512,       # Reasonable limit for simple Q&A
-        temperature=0.2,      # Low temperature for consistent learning
-        playbook_path=str(playbook_path) if playbook_path.exists() else None
+        model="claude-sonnet-4-5-20250929",  # Claude Sonnet 4.5
+        max_tokens=512,  # Reasonable limit for simple Q&A
+        temperature=0.2,  # Low temperature for consistent learning
+        playbook_path=str(playbook_path) if playbook_path.exists() else None,
     )
 
     # Show current knowledge state
@@ -101,7 +102,9 @@ def main():
         success_rate = successful_samples / len(results) if results else 0
 
         print(f"Learning completed:")
-        print(f"  Success rate: {success_rate:.1%} ({successful_samples}/{len(results)})")
+        print(
+            f"  Success rate: {success_rate:.1%} ({successful_samples}/{len(results)})"
+        )
         print(f"  Total strategies: {len(agent.playbook.bullets())}")
     except Exception as e:
         print(f"Learning failed: {e}")
@@ -139,6 +142,7 @@ def main():
     print("  4. Add your own training samples to teach specific tasks")
 
     print("\n" + "=" * 60)
+
 
 if __name__ == "__main__":
     main()

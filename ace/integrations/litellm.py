@@ -39,12 +39,15 @@ Example:
     agent = ACELiteLLM(model="gpt-4o-mini", playbook_path="my_agent.json")
 """
 
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional, Dict, Any, Tuple, Union
 
 from ..playbook import Playbook
-from ..roles import Generator, Reflector, Curator
+from ..roles import Generator, Reflector, Curator, GeneratorOutput
 from ..adaptation import OfflineAdapter, Sample, TaskEnvironment
 from ..prompts_v2_1 import PromptManager
+
+if TYPE_CHECKING:
+    from ..deduplication import DeduplicationConfig
 
 
 class ACELiteLLM:
@@ -60,9 +63,15 @@ class ACELiteLLM:
     - Prototyping and experimentation
     - Learning without external frameworks
 
+    Insight Level: Micro
+        Uses the full ACE loop with TaskEnvironment for ground truth evaluation.
+        The learn() method runs OfflineAdapter which evaluates correctness and
+        learns from whether answers are right or wrong.
+        See docs/COMPLETE_GUIDE_TO_ACE.md for details.
+
     For other use cases:
-    - ACEAgent (browser-use): Browser automation with learning
-    - ACELangChain: LangChain chains/agents with learning
+    - ACEAgent (browser-use): Browser automation with learning (meso-level)
+    - ACELangChain: LangChain chains/agents with learning (meso for AgentExecutor)
     - Integration pattern: Custom agent systems (see docs)
 
     Attributes:
@@ -92,10 +101,20 @@ class ACELiteLLM:
     def __init__(
         self,
         model: str = "gpt-4o-mini",
-        max_tokens: int = 512,
+        max_tokens: int = 2048,
         temperature: float = 0.0,
+        # Authentication & endpoint
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        # HTTP/SSL settings
+        extra_headers: Optional[Dict[str, str]] = None,
+        ssl_verify: Optional[Union[bool, str]] = None,
+        # ACE-specific settings
         playbook_path: Optional[str] = None,
         is_learning: bool = True,
+        dedup_config: Optional["DeduplicationConfig"] = None,
+        # Pass-through for advanced LiteLLM options
+        **llm_kwargs: Any,
     ):
         """
         Initialize ACELiteLLM agent.
@@ -103,10 +122,16 @@ class ACELiteLLM:
         Args:
             model: LiteLLM model name (default: gpt-4o-mini)
                    Supports 100+ providers: OpenAI, Anthropic, Google, etc.
-            max_tokens: Max tokens for responses (default: 512)
+            max_tokens: Max tokens for responses (default: 2048)
             temperature: Sampling temperature (default: 0.0)
+            api_key: API key for the LLM provider. Falls back to env vars if not set.
+            base_url: Custom API endpoint URL (e.g., http://localhost:1234/v1)
+            extra_headers: Custom HTTP headers dict (e.g., {"X-Tenant-ID": "abc"})
+            ssl_verify: SSL verification. False to disable, or path to CA bundle.
             playbook_path: Path to existing playbook (optional)
             is_learning: Enable/disable learning (default: True)
+            dedup_config: Optional DeduplicationConfig for bullet deduplication
+            **llm_kwargs: Additional LiteLLM parameters (timeout, max_retries, etc.)
 
         Raises:
             ImportError: If LiteLLM is not installed
@@ -121,10 +146,34 @@ class ACELiteLLM:
             # Google
             agent = ACELiteLLM(model="gemini/gemini-pro")
 
+            # With explicit API key
+            agent = ACELiteLLM(model="gpt-4", api_key="sk-...")
+
+            # Custom endpoint (LM Studio, Ollama)
+            agent = ACELiteLLM(
+                model="openai/local-model",
+                base_url="http://localhost:1234/v1"
+            )
+
+            # Enterprise with custom headers and SSL
+            agent = ACELiteLLM(
+                model="gpt-4",
+                base_url="https://proxy.company.com/v1",
+                extra_headers={"X-Tenant-ID": "team-alpha"},
+                ssl_verify="/path/to/internal-ca.pem"
+            )
+
             # With existing playbook
             agent = ACELiteLLM(
                 model="gpt-4o-mini",
                 playbook_path="expert.json"
+            )
+
+            # With deduplication
+            from ace import DeduplicationConfig
+            agent = ACELiteLLM(
+                model="gpt-4o-mini",
+                dedup_config=DeduplicationConfig(similarity_threshold=0.85)
             )
         """
         # Import LiteLLM (required for this integration)
@@ -139,6 +188,7 @@ class ACELiteLLM:
 
         self.model = model
         self.is_learning = is_learning
+        self.dedup_config = dedup_config
 
         # Load or create playbook
         if playbook_path:
@@ -146,9 +196,16 @@ class ACELiteLLM:
         else:
             self.playbook = Playbook()
 
-        # Create LLM client
+        # Create LLM client with configuration
         self.llm = LiteLLMClient(
-            model=model, max_tokens=max_tokens, temperature=temperature
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            api_key=api_key,
+            api_base=base_url,  # Map user-friendly name to LiteLLM's api_base
+            extra_headers=extra_headers,
+            ssl_verify=ssl_verify,
+            **llm_kwargs,
         )
 
         # Create ACE components with v2.1 prompts
@@ -163,11 +220,19 @@ class ACELiteLLM:
             self.llm, prompt_template=prompt_mgr.get_curator_prompt()
         )
 
+        # Store adapter reference for async learning control
+        self._adapter: Optional[OfflineAdapter] = None
+
+        # Store last interaction for learn_from_feedback()
+        self._last_interaction: Optional[Tuple[str, GeneratorOutput]] = None
+
     def ask(self, question: str, context: str = "") -> str:
         """
         Ask a question and get an answer (uses current playbook).
 
         This uses the ACE Generator with the current playbook's learned strategies.
+        The full GeneratorOutput trace is stored internally for potential learning
+        via learn_from_feedback().
 
         Args:
             question: Question to answer
@@ -186,10 +251,15 @@ class ACELiteLLM:
                 "What is GDP?",
                 context="Economics question"
             )
+
+            # Learn from feedback
+            agent.learn_from_feedback(feedback="correct")
         """
         result = self.generator.generate(
             question=question, context=context, playbook=self.playbook
         )
+        # Store full trace for potential learning via learn_from_feedback()
+        self._last_interaction = (question, result)
         return result.final_answer
 
     def learn(
@@ -197,6 +267,8 @@ class ACELiteLLM:
         samples: List[Sample],
         environment: TaskEnvironment,
         epochs: int = 1,
+        async_learning: bool = False,
+        max_reflector_workers: int = 3,
         checkpoint_interval: Optional[int] = None,
         checkpoint_dir: Optional[str] = None,
     ):
@@ -205,10 +277,20 @@ class ACELiteLLM:
 
         Uses OfflineAdapter to learn from a batch of samples.
 
+        Insight Level: Micro
+            This is micro-level learning with ground truth evaluation.
+            The TaskEnvironment evaluates each answer for correctness,
+            and the Reflector learns from whether answers are right or wrong.
+
         Args:
             samples: List of Sample objects to learn from
             environment: TaskEnvironment for evaluating results
             epochs: Number of training epochs (default: 1)
+            async_learning: Run learning in background (default: False)
+                           When True, Generator returns immediately while
+                           Reflector/Curator process in background.
+            max_reflector_workers: Number of parallel Reflector threads
+                                  (default: 3, only used when async_learning=True)
             checkpoint_interval: Save playbook every N samples (optional)
             checkpoint_dir: Directory for checkpoints (optional)
 
@@ -227,28 +309,116 @@ class ACELiteLLM:
             results = agent.learn(samples, SimpleEnvironment(), epochs=1)
 
             print(f"Learned {len(agent.playbook.bullets())} strategies")
+
+            # Async learning example
+            results = agent.learn(
+                samples, SimpleEnvironment(),
+                async_learning=True,
+                max_reflector_workers=3
+            )
+            # Results return immediately, learning continues in background
+            agent.wait_for_learning()  # Block until complete
+            print(agent.learning_stats)
         """
         if not self.is_learning:
             raise ValueError("Learning is disabled. Set is_learning=True first.")
 
         # Create offline adapter
-        adapter = OfflineAdapter(
+        self._adapter = OfflineAdapter(
             playbook=self.playbook,
             generator=self.generator,
             reflector=self.reflector,
             curator=self.curator,
+            async_learning=async_learning,
+            max_reflector_workers=max_reflector_workers,
+            dedup_config=self.dedup_config,
         )
 
         # Run learning
-        results = adapter.run(
+        results = self._adapter.run(
             samples=samples,
             environment=environment,
             epochs=epochs,
             checkpoint_interval=checkpoint_interval,
             checkpoint_dir=checkpoint_dir,
+            wait_for_learning=not async_learning,  # Don't block if async
         )
 
         return results
+
+    def learn_from_feedback(
+        self,
+        feedback: str,
+        ground_truth: Optional[str] = None,
+    ) -> bool:
+        """
+        Learn from the last ask() interaction.
+
+        Uses the stored GeneratorOutput trace from the previous ask() call.
+        This allows the Reflector to analyze the full reasoning and bullet
+        citations, not just the final answer.
+
+        Follows the `learn_from_X` naming pattern from other ACE integrations
+        (e.g., ACEAgent._learn_from_execution, ACELangChain._learn_from_failure).
+
+        Args:
+            feedback: User feedback describing the outcome. Can be:
+                     - Simple: "correct", "wrong", "partially correct"
+                     - Detailed: "Good answer but too verbose"
+            ground_truth: Optional correct answer if the response was wrong
+
+        Returns:
+            True if learning was applied
+            False if no prior interaction exists or learning is disabled
+
+        Example:
+            agent = ACELiteLLM()
+
+            # Ask and provide feedback
+            answer = agent.ask("What is 2+2?")
+            agent.learn_from_feedback(feedback="correct")
+
+            # With ground truth for incorrect answers
+            answer = agent.ask("Capital of Australia?")
+            agent.learn_from_feedback(
+                feedback="wrong",
+                ground_truth="Canberra"
+            )
+
+            # Detailed feedback
+            answer = agent.ask("Explain quantum physics")
+            agent.learn_from_feedback(
+                feedback="Too technical for a beginner audience"
+            )
+        """
+        if not self.is_learning:
+            return False
+
+        if self._last_interaction is None:
+            return False
+
+        question, generator_output = self._last_interaction
+
+        # Run Reflector with full trace context
+        reflection = self.reflector.reflect(
+            question=question,
+            generator_output=generator_output,  # Full trace: reasoning, bullet_ids
+            playbook=self.playbook,
+            ground_truth=ground_truth,
+            feedback=feedback,
+        )
+
+        # Run Curator to generate playbook updates
+        curator_output = self.curator.curate(
+            reflection=reflection,
+            playbook=self.playbook,
+            question_context=f"User interaction: {question}",
+            progress="Learning from user feedback",
+        )
+
+        # Apply updates to playbook
+        self.playbook.apply_delta(curator_output.delta)
+        return True
 
     def save_playbook(self, path: str):
         """
@@ -284,7 +454,7 @@ class ACELiteLLM:
 
     def get_strategies(self) -> str:
         """
-        Get current learned strategies as formatted text.
+        Get current playbook strategies as formatted text.
 
         Returns:
             Formatted string with learned strategies (empty if none)
@@ -295,14 +465,67 @@ class ACELiteLLM:
         """
         if not self.playbook or not self.playbook.bullets():
             return ""
+        from .base import wrap_playbook_context
 
-        lines = ["Learned Strategies:"]
-        for i, bullet in enumerate(self.playbook.bullets(), 1):
-            score = f"+{bullet.helpful}/-{bullet.harmful}"
-            lines.append(f"{i}. [{bullet.id}] {bullet.content}")
-            lines.append(f"   Score: {score}")
+        return wrap_playbook_context(self.playbook)
 
-        return "\n".join(lines)
+    def wait_for_learning(self, timeout: Optional[float] = None) -> bool:
+        """
+        Wait for async learning to complete.
+
+        Only relevant when using async_learning=True in learn().
+
+        Args:
+            timeout: Maximum seconds to wait (None = wait forever)
+
+        Returns:
+            True if all learning completed, False if timeout reached
+
+        Example:
+            agent.learn(samples, env, async_learning=True)
+            # Do other work while learning happens...
+            success = agent.wait_for_learning(timeout=60.0)
+            if success:
+                print("Learning complete!")
+        """
+        if self._adapter is None:
+            return True
+        return self._adapter.wait_for_learning(timeout)
+
+    @property
+    def learning_stats(self) -> Dict[str, Any]:
+        """
+        Get async learning statistics.
+
+        Returns:
+            Dictionary with learning progress info:
+            - async_learning: Whether async mode is enabled
+            - pending: Number of samples still being processed
+            - completed: Number of samples processed
+            - queue_size: Reflections waiting for Curator
+
+        Example:
+            stats = agent.learning_stats
+            print(f"Pending: {stats['pending']}")
+        """
+        if self._adapter is None:
+            return {"async_learning": False, "pending": 0, "completed": 0}
+        return self._adapter.learning_stats
+
+    def stop_async_learning(self):
+        """
+        Stop async learning pipeline.
+
+        Shuts down background threads and clears pending work.
+        Call this before exiting to ensure clean shutdown.
+
+        Example:
+            agent.learn(samples, env, async_learning=True)
+            # Decide to stop early...
+            agent.stop_async_learning()
+        """
+        if self._adapter:
+            self._adapter.stop_async_learning()
 
     def __repr__(self) -> str:
         """String representation."""

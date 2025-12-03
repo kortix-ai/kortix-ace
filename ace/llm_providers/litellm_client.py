@@ -41,8 +41,8 @@ class LiteLLMConfig:
     api_base: Optional[str] = None
     api_version: Optional[str] = None
     temperature: float = 0.0
-    max_tokens: int = 512
-    top_p: float = 0.9
+    max_tokens: int = 2048
+    top_p: Optional[float] = None
     timeout: int = 60
     max_retries: int = 3
     fallbacks: Optional[List[str]] = None
@@ -63,6 +63,10 @@ class LiteLLMConfig:
     # Claude-specific parameter handling
     # Anthropic API limitation: temperature and top_p cannot both be specified
     sampling_priority: str = "temperature"  # "temperature" | "top_p" | "top_k"
+
+    # HTTP/SSL settings
+    extra_headers: Optional[Dict[str, str]] = None  # Custom HTTP headers
+    ssl_verify: Optional[Union[bool, str]] = None  # True/False or path to CA bundle
 
 
 class LiteLLMClient(LLMClient):
@@ -112,7 +116,7 @@ class LiteLLMClient(LLMClient):
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
         temperature: float = 0.0,
-        max_tokens: int = 512,
+        max_tokens: int = 2048,
         fallbacks: Optional[List[str]] = None,
         sampling_priority: str = "temperature",
         config: Optional[LiteLLMConfig] = None,
@@ -240,6 +244,21 @@ class LiteLLMClient(LLMClient):
 
     def _setup_opik_integration(self) -> None:
         """Set up Opik integration for automatic token and cost tracking."""
+        # Check if explicitly disabled (support both patterns)
+        disabled_check = os.environ.get("OPIK_DISABLED", "").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        enabled_check = os.environ.get("OPIK_ENABLED", "").lower() in (
+            "false",
+            "0",
+            "no",
+        )
+        if disabled_check or enabled_check:
+            logger.debug("Opik integration disabled via environment variable")
+            return
+
         try:
             # Import observability module
             from ..observability import get_integration
@@ -421,6 +440,12 @@ class LiteLLMClient(LLMClient):
         if self.config.api_base:
             call_params["api_base"] = self.config.api_base
 
+        # Add HTTP/SSL settings
+        if self.config.extra_headers:
+            call_params["extra_headers"] = self.config.extra_headers
+        if self.config.ssl_verify is not None:
+            call_params["ssl_verify"] = self.config.ssl_verify
+
         # Add Opik span association for role-level token aggregation
         if OPIK_SPAN_AVAILABLE and get_current_span_data:
             try:
@@ -544,6 +569,12 @@ class LiteLLMClient(LLMClient):
             call_params["api_key"] = self.config.api_key
         if self.config.api_base:
             call_params["api_base"] = self.config.api_base
+
+        # Add HTTP/SSL settings
+        if self.config.extra_headers:
+            call_params["extra_headers"] = self.config.extra_headers
+        if self.config.ssl_verify is not None:
+            call_params["ssl_verify"] = self.config.ssl_verify
 
         # Add Opik span association for role-level token aggregation
         if OPIK_SPAN_AVAILABLE and get_current_span_data:

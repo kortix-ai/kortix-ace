@@ -1,16 +1,27 @@
 #!/usr/bin/env python3
 """
-LangChain agent with tools + ACE learning example.
+LangChain AgentExecutor with ACE meso-level learning example.
 
-This example demonstrates how to wrap a LangChain agent with tools using ACELangChain.
-The agent learns from tool usage patterns and multi-step reasoning.
+This example demonstrates how to wrap a LangChain AgentExecutor with ACELangChain.
+When using AgentExecutor, ACE automatically captures the full reasoning trace
+(thoughts, actions, observations) for meso-level learning.
+
+INSIGHT LEVELS:
+- Micro: Full ACE loop with TaskEnvironment - learns from ground truth/feedback
+- Meso: AgentExecutor - learns from agent reasoning traces (no external feedback)
+
+Meso-level learning captures:
+- Agent thoughts (reasoning)
+- Tool calls (actions)
+- Tool outputs (observations)
+- Final answer
 
 Requirements:
     pip install ace-framework[langchain]
-    # or: pip install langchain-core langchain-openai langchain-community
+    # or: pip install langchain langchain-anthropic
 
 Environment:
-    export OPENAI_API_KEY="your-api-key"
+    export ANTHROPIC_API_KEY="your-api-key"
 """
 
 import os
@@ -32,9 +43,10 @@ except ImportError:
     print("Install with: pip install ace-framework")
     exit(1)
 
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 
 
 # Define custom tools
@@ -56,215 +68,221 @@ def get_word_length(word: str) -> int:
     return len(word)
 
 
-def example_agent_with_tools():
-    """Example 1: Agent with math tools and ACE learning."""
+def example_agent_executor_meso():
+    """
+    Example 1: AgentExecutor with meso-level learning.
+
+    This uses a real AgentExecutor, so ACE captures:
+    - Agent's reasoning (thoughts)
+    - Tool calls (actions)
+    - Tool outputs (observations)
+    - Final answer
+
+    This produces much richer learning than simple chains!
+    """
     print("\n" + "=" * 60)
-    print("Example 1: Agent with Tools")
+    print("Example 1: AgentExecutor with Meso-Level Learning")
     print("=" * 60)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("Please set ANTHROPIC_API_KEY in your .env file")
         return
 
-    # Note: This example shows the pattern, but requires additional LangChain packages
-    # For a fully functional agent, you'd need to use LangChain's agent framework
-    # Here we show a simplified chain that demonstrates the ACE integration
+    # Create tools
+    tools = [add, multiply, get_word_length]
 
-    # Create a simple prompt chain (in practice, use create_tool_calling_agent)
-    prompt = ChatPromptTemplate.from_template(
-        """You are a helpful assistant. Answer the question: {input}
+    # Create LLM
+    llm = ChatAnthropic(temperature=0, model="claude-sonnet-4-5-20250929")
 
-Available tools:
-- add(a, b): Add two numbers
-- multiply(a, b): Multiply two numbers
-- get_word_length(word): Get length of a word
-
-Think step by step and use tools as needed."""
+    # Create prompt for tool-calling agent
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a helpful assistant that uses tools to solve problems. "
+                "Think step by step and use tools as needed.",
+            ),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ]
     )
 
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
-    chain = prompt | llm
+    # Create the agent
+    agent = create_tool_calling_agent(llm, tools, prompt)
 
-    # Wrap with ACE
-    ace_agent = ACELangChain(runnable=chain, ace_model="gpt-4o-mini", is_learning=True)
+    # Create AgentExecutor
+    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
-    # Test questions
+    # Wrap with ACE - meso-level learning is automatic for AgentExecutor!
+    ace_agent = ACELangChain(
+        runnable=agent_executor,
+        ace_model="claude-sonnet-4-5-20250929",
+        is_learning=True,
+    )
+
+    print("\nNote: ACE automatically uses meso-level learning for AgentExecutor.")
+    print("This captures the full reasoning trace for better insights.\n")
+
+    # Test questions that require tool use
     questions = [
         "What is 23 + 45?",
         "Calculate 12 * 7",
-        "How long is the word 'anthropic'?",
+        "How many characters are in the word 'anthropic'?",
     ]
 
     for i, question in enumerate(questions, 1):
-        print(f"\nQuestion {i}: {question}")
+        print(f"\n{'='*40}")
+        print(f"Question {i}: {question}")
+        print("=" * 40)
         result = ace_agent.invoke({"input": question})
-        print(f"Response: {result.content[:150]}...")
+        print(f"\nFinal Answer: {result}")
 
-    print(f"\nLearned {len(ace_agent.playbook.bullets())} strategies")
-    ace_agent.save_playbook("agent_with_tools_learned.json")
-
-
-def example_multi_step_reasoning():
-    """Example 2: Agent learning multi-step reasoning patterns."""
-    print("\n" + "=" * 60)
-    print("Example 2: Multi-Step Reasoning")
-    print("=" * 60)
-
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
-        return
-
-    # Create a chain that encourages step-by-step thinking
-    prompt = ChatPromptTemplate.from_template(
-        """Break down the problem and solve step by step:
-
-Problem: {input}
-
-Think through each step carefully."""
+    print(
+        f"\n\nLearned {len(ace_agent.playbook.bullets())} strategies from agent traces"
     )
 
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
-    chain = prompt | llm
+    # Show what was learned
+    if ace_agent.playbook.bullets():
+        print("\nLearned strategies (from meso-level analysis):")
+        for i, bullet in enumerate(ace_agent.playbook.bullets()[:3], 1):
+            print(f"  {i}. {bullet.content[:80]}...")
 
-    # Wrap with ACE
-    ace_agent = ACELangChain(runnable=chain, ace_model="gpt-4o-mini")
-
-    # Complex questions requiring multiple steps
-    questions = [
-        "If a store sells 15 apples per hour and is open for 8 hours, how many apples does it sell?",
-        "A train travels at 60 mph for 2.5 hours. How far does it go?",
-        "If you have 3 boxes with 12 items each, and you remove 5 items total, how many remain?",
-    ]
-
-    for i, question in enumerate(questions, 1):
-        print(f"\nQuestion {i}: {question}")
-        result = ace_agent.invoke({"input": question})
-        print(f"Response: {result.content[:200]}...")
-
-    print(f"\nLearned {len(ace_agent.playbook.bullets())} reasoning strategies")
+    ace_agent.save_playbook("agent_executor_learned.json")
+    print("\nPlaybook saved to: agent_executor_learned.json")
 
 
-def example_string_input():
-    """Example 3: Using string input instead of dict."""
+def example_simple_chain_vs_agent():
+    """
+    Example 2: Compare simple chain vs AgentExecutor learning.
+
+    Shows the difference in what ACE sees:
+    - Simple chain: Only sees input/output (basic learning)
+    - AgentExecutor: Sees full reasoning trace (meso-level learning)
+
+    Note: For true micro-level learning (with ground truth feedback),
+    use OfflineAdapter or OnlineAdapter with a TaskEnvironment.
+    """
     print("\n" + "=" * 60)
-    print("Example 3: String Input Format")
+    print("Example 2: Simple Chain vs AgentExecutor")
     print("=" * 60)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("Please set ANTHROPIC_API_KEY in your .env file")
         return
 
-    # Create a simple LLM (without prompt template)
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
+    llm = ChatAnthropic(temperature=0, model="claude-sonnet-4-5-20250929")
+    tools = [add, multiply]
 
-    # Wrap with ACE
-    ace_agent = ACELangChain(runnable=llm, ace_model="gpt-4o-mini")
+    # --- Simple chain: basic learning ---
+    print("\n--- SIMPLE CHAIN (basic learning) ---")
+    simple_prompt = ChatPromptTemplate.from_template(
+        "Calculate: {input}. Show your work."
+    )
+    simple_chain = simple_prompt | llm
 
-    # Use string input directly
-    questions = [
-        "What is the capital of Japan?",
-        "Explain photosynthesis in one sentence.",
-        "What is the speed of light?",
-    ]
+    ace_simple = ACELangChain(
+        runnable=simple_chain, ace_model="claude-sonnet-4-5-20250929"
+    )
+    result_simple = ace_simple.invoke({"input": "What is 5 * 6?"})
+    print(f"Result: {result_simple.content}")
+    print(f"Strategies learned: {len(ace_simple.playbook.bullets())}")
+    print("ACE sees: request → response only")
 
-    for i, question in enumerate(questions, 1):
-        print(f"\nQuestion {i}: {question}")
-        result = ace_agent.invoke(question)  # String input
-        print(f"Answer: {result.content}")
+    # --- AgentExecutor: meso-level learning ---
+    print("\n--- AGENT EXECUTOR (meso-level learning) ---")
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "Use tools to solve math problems."),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ]
+    )
+    agent = create_tool_calling_agent(llm, tools, prompt)
+    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
 
-    print(f"\nLearned {len(ace_agent.playbook.bullets())} strategies")
+    ace_agent = ACELangChain(
+        runnable=agent_executor, ace_model="claude-sonnet-4-5-20250929"
+    )
+    result_agent = ace_agent.invoke({"input": "What is 5 * 6?"})
+    print(f"Result: {result_agent}")
+    print(f"Strategies learned: {len(ace_agent.playbook.bullets())}")
+    print("ACE sees: thoughts → tool calls → observations → answer")
 
-
-def example_learning_from_failures():
-    """Example 4: Learning from execution failures."""
-    print("\n" + "=" * 60)
-    print("Example 4: Learning from Failures")
-    print("=" * 60)
-
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
-        return
-
-    # Create a chain
-    prompt = ChatPromptTemplate.from_template("Answer concisely: {input}")
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
-    chain = prompt | llm
-
-    # Wrap with ACE
-    ace_agent = ACELangChain(runnable=chain, ace_model="gpt-4o-mini")
-
-    print("Initial strategies:", len(ace_agent.playbook.bullets()))
-
-    # First question - normal execution
-    print("\nNormal execution:")
-    result = ace_agent.invoke({"input": "What is 2+2?"})
-    print(f"Answer: {result.content}")
-    print("Strategies after success:", len(ace_agent.playbook.bullets()))
-
-    # Note: ACE learns from both successes and failures
-    # In a real scenario with tool-using agents, failures might include:
-    # - Tool not found errors
-    # - Invalid tool parameters
-    # - Execution timeouts
-    # ACE captures these patterns and learns to avoid them
+    print("\n--- KEY DIFFERENCE ---")
+    print("AgentExecutor gives ACE visibility into the agent's reasoning process.")
+    print(
+        "This enables learning from HOW the agent solved the problem, not just WHAT it returned."
+    )
 
 
 async def example_async_agent():
-    """Example 5: Async agent execution with ACE."""
+    """Example 3: Async AgentExecutor with meso-level learning."""
     print("\n" + "=" * 60)
-    print("Example 5: Async Agent Execution")
+    print("Example 3: Async AgentExecutor")
     print("=" * 60)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("Please set ANTHROPIC_API_KEY in your .env file")
         return
 
-    # Create chain
-    prompt = ChatPromptTemplate.from_template("Provide a detailed answer: {input}")
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
-    chain = prompt | llm
+    llm = ChatAnthropic(temperature=0, model="claude-sonnet-4-5-20250929")
+    tools = [add, multiply, get_word_length]
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a helpful assistant with tools."),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ]
+    )
+    agent = create_tool_calling_agent(llm, tools, prompt)
+    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
 
     # Wrap with ACE
-    ace_agent = ACELangChain(runnable=chain, ace_model="gpt-4o-mini")
+    ace_agent = ACELangChain(
+        runnable=agent_executor, ace_model="claude-sonnet-4-5-20250929"
+    )
 
-    # Async execution
+    # Async execution with meso-level learning
     questions = [
-        "What are the benefits of async programming?",
-        "Explain how neural networks learn.",
-        "What is the difference between REST and GraphQL?",
+        "Add 100 and 200",
+        "What is 15 times 4?",
     ]
 
     for question in questions:
         print(f"\nQuestion: {question}")
         result = await ace_agent.ainvoke({"input": question})
-        print(f"Answer: {result.content[:150]}...")
+        print(f"Answer: {result}")
+
+    print(f"\nLearned {len(ace_agent.playbook.bullets())} strategies (async meso)")
 
 
 def main():
     """Run all examples."""
     print("=" * 60)
-    print("LangChain Agent + Tools + ACE Examples")
+    print("LangChain AgentExecutor + ACE Meso-Level Learning")
     print("=" * 60)
+    print("\nThis demonstrates how ACE learns from agent reasoning traces.")
+    print("AgentExecutor provides much richer learning than simple chains!")
 
     # Run sync examples
-    example_agent_with_tools()
-    example_multi_step_reasoning()
-    example_string_input()
-    example_learning_from_failures()
+    example_agent_executor_meso()
+    example_simple_chain_vs_agent()
 
     # Run async example
     import asyncio
 
-    if os.getenv("OPENAI_API_KEY"):
+    if os.getenv("ANTHROPIC_API_KEY"):
         asyncio.run(example_async_agent())
 
     print("\n" + "=" * 60)
     print("Examples completed!")
     print("=" * 60)
-    print("\nNext steps:")
-    print("1. Check learned strategies in playbook JSON files")
-    print("2. Experiment with your own chains and agents")
-    print("3. See docs/INTEGRATION_GUIDE.md for more patterns")
+    print("\nKey takeaways:")
+    print("- Use AgentExecutor for meso-level learning (richer insights)")
+    print("- Simple chains only get micro-level learning")
+    print("- ACE automatically detects AgentExecutor and enables meso mode")
+    print("\nSee docs/COMPLETE_GUIDE_TO_ACE.md for more on insight levels")
 
 
 if __name__ == "__main__":

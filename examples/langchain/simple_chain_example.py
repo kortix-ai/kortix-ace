@@ -8,10 +8,10 @@ over time.
 
 Requirements:
     pip install ace-framework[langchain]
-    # or: pip install langchain-core langchain-openai
+    # or: pip install langchain-core langchain-anthropic
 
 Environment:
-    export OPENAI_API_KEY="your-api-key"
+    export ANTHROPIC_API_KEY="your-api-key"
 """
 
 import os
@@ -27,7 +27,7 @@ try:
     if not LANGCHAIN_AVAILABLE:
         print("LangChain is not installed.")
         print("Install with: pip install ace-framework[langchain]")
-        print("or: pip install langchain-core langchain-openai")
+        print("or: pip install langchain-core langchain-anthropic")
         exit(1)
 except ImportError:
     print("ACE framework not installed.")
@@ -35,7 +35,7 @@ except ImportError:
     exit(1)
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 
 
 def example_basic_chain():
@@ -44,17 +44,19 @@ def example_basic_chain():
     print("Example 1: Basic LLM Chain with ACE")
     print("=" * 60)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("Please set ANTHROPIC_API_KEY in your .env file")
         return
 
     # Create a simple LangChain chain
     prompt = ChatPromptTemplate.from_template("Answer briefly: {input}")
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
+    llm = ChatAnthropic(temperature=0, model="claude-sonnet-4-5-20250929")
     chain = prompt | llm
 
     # Wrap with ACE learning
-    ace_chain = ACELangChain(runnable=chain, ace_model="gpt-4o-mini", is_learning=True)
+    ace_chain = ACELangChain(
+        runnable=chain, ace_model="claude-sonnet-4-5-20250929", is_learning=True
+    )
 
     # Run some questions
     questions = [
@@ -82,8 +84,8 @@ def example_reuse_playbook():
     print("Example 2: Reusing Learned Strategies")
     print("=" * 60)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("Please set ANTHROPIC_API_KEY in your .env file")
         return
 
     # Check if playbook exists
@@ -93,13 +95,13 @@ def example_reuse_playbook():
 
     # Create chain
     prompt = ChatPromptTemplate.from_template("Answer briefly: {input}")
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
+    llm = ChatAnthropic(temperature=0, model="claude-sonnet-4-5-20250929")
     chain = prompt | llm
 
     # Load existing playbook
     ace_chain = ACELangChain(
         runnable=chain,
-        ace_model="gpt-4o-mini",
+        ace_model="claude-sonnet-4-5-20250929",
         playbook_path="simple_chain_learned.json",
         is_learning=True,
     )
@@ -128,17 +130,19 @@ def example_learning_control():
     print("Example 3: Learning Control (Enable/Disable)")
     print("=" * 60)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("Please set ANTHROPIC_API_KEY in your .env file")
         return
 
     # Create chain
     prompt = ChatPromptTemplate.from_template("Answer briefly: {input}")
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
+    llm = ChatAnthropic(temperature=0, model="claude-sonnet-4-5-20250929")
     chain = prompt | llm
 
     # Start with learning disabled
-    ace_chain = ACELangChain(runnable=chain, ace_model="gpt-4o-mini", is_learning=False)
+    ace_chain = ACELangChain(
+        runnable=chain, ace_model="claude-sonnet-4-5-20250929", is_learning=False
+    )
 
     print("Initial strategies:", len(ace_chain.playbook.bullets()))
 
@@ -165,17 +169,17 @@ async def example_async_chain():
     print("Example 4: Async Chain Execution")
     print("=" * 60)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("Please set ANTHROPIC_API_KEY in your .env file")
         return
 
     # Create chain
     prompt = ChatPromptTemplate.from_template("Answer in one sentence: {input}")
-    llm = ChatOpenAI(temperature=0.7, model="gpt-4o-mini")
+    llm = ChatAnthropic(temperature=0.7, model="claude-sonnet-4-5-20250929")
     chain = prompt | llm
 
     # Wrap with ACE
-    ace_chain = ACELangChain(runnable=chain, ace_model="gpt-4o-mini")
+    ace_chain = ACELangChain(runnable=chain, ace_model="claude-sonnet-4-5-20250929")
 
     # Async execution
     questions = [
@@ -196,8 +200,8 @@ def example_custom_output_parser():
     print("Example 5: Custom Output Parser")
     print("=" * 60)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY in your .env file")
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("Please set ANTHROPIC_API_KEY in your .env file")
         return
 
     # Custom parser that extracts specific format
@@ -211,12 +215,14 @@ def example_custom_output_parser():
     prompt = ChatPromptTemplate.from_template(
         "List 3 facts about {topic}. Format as JSON."
     )
-    llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
+    llm = ChatAnthropic(temperature=0, model="claude-sonnet-4-5-20250929")
     chain = prompt | llm
 
     # Wrap with custom parser
     ace_chain = ACELangChain(
-        runnable=chain, ace_model="gpt-4o-mini", output_parser=parse_output
+        runnable=chain,
+        ace_model="claude-sonnet-4-5-20250929",
+        output_parser=parse_output,
     )
 
     # Test
@@ -240,7 +246,7 @@ def main():
     # Run async example
     import asyncio
 
-    if os.getenv("OPENAI_API_KEY"):
+    if os.getenv("ANTHROPIC_API_KEY"):
         asyncio.run(example_async_chain())
 
     print("\n" + "=" * 60)

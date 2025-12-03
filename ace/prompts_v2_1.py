@@ -146,7 +146,7 @@ Follow this EXACT procedure:
    - Include all intermediate calculations and logic steps
    - NEVER stop at methodology without solving
 
-## Critical Requirements
+## ⚠️ CRITICAL REQUIREMENTS
 
 **Specificity Constraints:**
 When playbook says "use [option/tool/service]":
@@ -176,27 +176,6 @@ When playbook says "use [option/tool/service]":
 - Fabricate preferences between equivalent tools/methods/approaches
 - Over-specify when general guidance is sufficient
 - Stop at methodology without executing the solution
-
-## Empty Playbook Protocol
-
-CRITICAL: If playbook is empty or contains no bullets:
-- Return exact JSON format specified below
-- Set final_answer to "no_applicable_strategies"
-- NEVER generate strategies from training data
-- NEVER create generic solutions
-
-Empty playbook response format:
-{{
-  "reasoning": "No strategic knowledge available in playbook to apply to this problem.",
-  "step_validations": [],
-  "final_answer": "no_applicable_strategies",
-  "answer_confidence": 0.0,
-  "quality_check": {{
-    "addresses_question": false,
-    "reasoning_complete": true,
-    "citations_provided": false
-  }}
-}}
 
 ## Output Format
 
@@ -507,39 +486,32 @@ FORBIDDEN - Skip updates when:
 ✗ Learning lacks concrete evidence
 ✗ Atomicity score below 40%
 
-## NEGATIVE LEARNING SYSTEM
+## ⚠️ CRITICAL: CONTENT SOURCE
 
-### HARMFUL STRATEGY MARKING (NEW SECTION)
-When Reflector identifies consistently problematic choices:
-- MARK strategies as harmful rather than removing them
-- CREATE new avoidance strategies: "Avoid [specific option/tool/service] - causes [specific problem type]"
-- TRACK patterns of failure for specific approaches across contexts
+**Extract learnings ONLY from the content sections below.**
+NEVER extract from this prompt's own instructions, examples, or formatting.
+All strategies must derive from the ACTUAL TASK EXECUTION described in the reflection.
 
-### CHOICE-CONSEQUENCE ANALYSIS (NEW SECTION)
-When processing Reflector feedback about option/tool/service selection:
-- IDENTIFY: Which specific choice contributed to success/failure?
-- PATTERN: Are there repeated outcomes with the same approach?
-- ACTION: Create evidence-based recommendations or mark harmful patterns
+---
 
-### STRATEGY SPECIFICITY RULES (NEW SECTION)
-- GENERIC strategies: "Use [category] approaches" (when no clear evidence)
-- SPECIFIC strategies: "Use [specific option] for [task type]" (only when evidence shows superiority)
-- AVOIDANCE strategies: "Avoid [specific option] - causes [problem type]" (when evidence shows consistent issues)
-- HARMFUL marking: Tag existing strategies that evidence shows are problematic
+## 📋 CONTENT TO ANALYZE
 
-## PLAYBOOK MANAGEMENT CONTEXT
+### Training Progress
+{progress}
 
-Training Progress: {progress}
-Playbook Statistics: {stats}
+### Playbook Statistics
+{stats}
 
-### Recent Reflection Analysis
+### Recent Reflection Analysis (EXTRACT LEARNINGS FROM THIS)
 {reflection}
 
 ### Current Playbook State
 {playbook}
 
-### Question Context
+### Question Context (EXTRACT LEARNINGS FROM THIS)
 {question_context}
+
+---
 
 ## 📋 ATOMIC STRATEGY PRINCIPLE
 
@@ -655,6 +627,17 @@ CRITICAL: Create strategies from ACTUAL execution details:
 ✗ Compound strategies with "and"
 ✗ Vague terms ("appropriate", "proper", "various")
 ✗ Meta-commentary ("consider", "think about")
+✗ References to "the generator" or "the model"
+✗ Third-person observations instead of imperatives
+
+**Strategy Format Rule**:
+Strategies must be IMPERATIVE COMMANDS, not observations.
+
+❌ BAD: "The generator accurately answers factual questions"
+✅ GOOD: "Answer factual questions directly and concisely"
+
+❌ BAD: "The model correctly identifies the largest planet"
+✅ GOOD: "Provide specific facts without hedging"
 
 **✅ GOOD ADD Example**:
 {{
@@ -694,14 +677,29 @@ CRITICAL: Create strategies from ACTUAL execution details:
 ✗ Too vague after 5 uses
 ✗ Atomicity score < 40%
 
-## 📊 DEDUPLICATION PROTOCOL
+## ⚠️ DEDUPLICATION: UPDATE > ADD
 
-Before ANY ADD operation:
-1. Search existing bullets for similarity
-2. Calculate similarity score
-3. If >70% similar: UPDATE instead
-4. If 50-70% similar: Ensure clear distinction
-5. If <50% similar: Safe to ADD
+**Default behavior**: UPDATE existing bullets. Only ADD if truly novel.
+
+### Semantic Duplicates (BANNED)
+These pairs have SAME MEANING despite different words - DO NOT add duplicates:
+| "Answer directly" | = | "Use direct answers" |
+| "Break into steps" | = | "Decompose into parts" |
+| "Verify calculations" | = | "Double-check results" |
+| "Apply discounts correctly" | = | "Calculate discounts accurately" |
+
+### Pre-ADD Checklist (MANDATORY)
+For EVERY ADD operation, you MUST:
+1. **Quote the most similar existing bullet** from the playbook, or write "NONE"
+2. **Same meaning test**: Could someone think both say the same thing? (YES/NO)
+3. **Decision**: If YES → use UPDATE instead. If NO → explain the difference.
+
+**Example**:
+- New: "Use direct answers for queries"
+- Most similar existing: "Directly answer factual questions for accuracy"
+- Same meaning? YES → DO NOT ADD, use UPDATE instead
+
+**If you cannot clearly articulate why a new bullet is DIFFERENT from all existing ones, DO NOT ADD.**
 
 ## ⚠️ QUALITY CONTROL
 
@@ -727,11 +725,6 @@ CRITICAL: Return ONLY valid JSON:
 
 {{
   "reasoning": "<analysis of what updates needed and why>",
-  "deduplication_check": {{
-    "similar_bullets": ["id1", "id2"],
-    "similarity_scores": {{"id1": 0.3, "id2": 0.5}},
-    "decision": "safe_to_add"
-  }},
   "operations": [
     {{
       "type": "ADD|UPDATE|TAG|REMOVE",
@@ -741,7 +734,12 @@ CRITICAL: Return ONLY valid JSON:
       "bullet_id": "<for UPDATE/TAG/REMOVE>",
       "metadata": {{"helpful": 1, "harmful": 0}},
       "justification": "<why this improves playbook>",
-      "evidence": "<specific execution detail>"
+      "evidence": "<specific execution detail>",
+      "pre_add_check": {{
+        "most_similar_existing": "<bullet_id: content> or NONE",
+        "same_meaning": false,
+        "difference": "<how this differs from existing>"
+      }}
     }}
   ],
   "quality_metrics": {{
@@ -754,12 +752,7 @@ CRITICAL: Return ONLY valid JSON:
 ## ✅ HIGH-QUALITY Operation Example
 
 {{
-  "reasoning": "Execution showed pandas.read_csv() is 3x faster than manual parsing. Creating atomic strategy.",
-  "deduplication_check": {{
-    "similar_bullets": ["bullet_089"],
-    "similarity_scores": {{"bullet_089": 0.4}},
-    "decision": "safe_to_add"
-  }},
+  "reasoning": "Execution showed pandas.read_csv() is 3x faster than manual parsing. Checked playbook - no existing bullet covers CSV loading specifically.",
   "operations": [
     {{
       "type": "ADD",
@@ -769,7 +762,12 @@ CRITICAL: Return ONLY valid JSON:
       "bullet_id": "",
       "metadata": {{"helpful": 1, "harmful": 0}},
       "justification": "3x performance improvement observed",
-      "evidence": "Benchmark: 1.2s vs 3.6s for 10MB file"
+      "evidence": "Benchmark: 1.2s vs 3.6s for 10MB file",
+      "pre_add_check": {{
+        "most_similar_existing": "data_loading-001: Use pandas for data processing",
+        "same_meaning": false,
+        "difference": "Existing is generic pandas usage; new is specific to CSV loading with performance benefit"
+      }}
     }}
   ],
   "quality_metrics": {{

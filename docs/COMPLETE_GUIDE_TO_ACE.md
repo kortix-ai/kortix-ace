@@ -67,6 +67,22 @@ The playbook stores learned strategies as structured "bullets"—discrete pieces
 4. **Curation:** Curator updates the playbook with delta operations
 5. **Iteration:** Process repeats, playbook grows more refined over time
 
+### Insight Levels
+
+The Reflector can analyze execution at three different levels of scope, producing insights of varying depth:
+
+| Level | Scope | What's Analyzed | Learning Quality |
+|-------|-------|-----------------|------------------|
+| **Micro** | Single interaction + environment | Request → response → ground truth/feedback | Learns from correctness |
+| **Meso** | Full agent run | Reasoning traces (thoughts, tool calls, observations) | Learns from execution patterns |
+| **Macro** | Cross-run analysis | Patterns across multiple executions | Comprehensive (future) |
+
+**Micro-level insights** come from the full ACE adaptation loop with environment feedback and ground truth. The Reflector knows whether the answer was correct and learns from that evaluation. Used by OfflineAdapter and OnlineAdapter.
+
+**Meso-level insights** come from full agent runs with intermediate steps—the agent's thoughts, tool calls, and observations—but without external ground truth. The Reflector learns from the execution patterns themselves. Used by integration wrappers like ACELangChain with AgentExecutor.
+
+**Macro-level insights** (future) will compare patterns across multiple runs to identify systemic improvements.
+
 ---
 
 ## Key Technical Innovations
@@ -94,6 +110,47 @@ Instead of dumping the entire playbook into context, ACE uses hybrid retrieval t
 - Keeps context windows manageable
 - Prioritizes proven strategies
 - Reduces token costs
+
+### Async Learning Mode
+
+For latency-sensitive applications, ACE supports async learning where the Generator returns immediately while Reflector and Curator process in the background:
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│                       ASYNC LEARNING PIPELINE                         │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  Sample 1 ──► Generator ──► Env ──► Reflector ─┐                     │
+│  Sample 2 ──► Generator ──► Env ──► Reflector ─┼──► Queue ──► Curator │
+│  Sample 3 ──► Generator ──► Env ──► Reflector ─┘         (serialized) │
+│             (parallel)           (parallel)                           │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+**Why this architecture:**
+- **Parallel Reflectors**: Safe to parallelize (read-only analysis, no playbook writes)
+- **Serialized Curator**: Must be sequential (writes to playbook, handles deduplication)
+- **3x faster learning**: Reflector LLM calls run concurrently
+
+**Usage:**
+```python
+adapter = OfflineAdapter(
+    playbook=playbook,
+    generator=generator,
+    reflector=reflector,
+    curator=curator,
+    async_learning=True,        # Enable async mode
+    max_reflector_workers=3,    # Parallel Reflector threads
+)
+
+results = adapter.run(samples, environment)  # Fast - learning in background
+
+# Control methods
+adapter.learning_stats       # Check progress
+adapter.wait_for_learning()  # Block until complete
+adapter.stop_async_learning() # Shutdown pipeline
+```
 
 ---
 

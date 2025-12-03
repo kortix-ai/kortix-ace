@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """
-ACE + Browser-Use Domain Checker Demo
+ACE + Browser-Use Domain Checker Demo (SYNCHRONOUS LEARNING)
 
-Simple demo showing ACE learning to improve at checking domain availability.
-Uses the new ACEAgent integration for clean, automatic learning.
+This version uses SYNCHRONOUS learning - the Reflector and Curator run AFTER
+each browser task completes, BLOCKING execution until learning finishes.
+
+Behavior:
+- Domain 1 finishes → Learning runs (blocks) → Domain 2 starts with new knowledge
+- Each domain check benefits from ALL previous learning
+- Slower overall execution, but simpler to understand
+
+See ace_domain_checker_async.py for the async (non-blocking) version.
 """
 
 import asyncio
@@ -496,7 +503,6 @@ async def main():
         playbook_path=str(playbook_path) if playbook_path.exists() else None,
         max_steps=25,  # Browser automation steps
         calculate_cost=True,  # Track usage
-        async_learning=True,  # Learning happens in background (non-blocking)
     )
 
     # Show current knowledge
@@ -541,10 +547,10 @@ async def main():
         if result["error"]:
             print(f"   Error: {result['error']}")
 
-    # Wait for async learning to complete before saving
-    print(f"\n⏳ Waiting for background learning to complete...")
-    await agent.wait_for_learning(timeout=60.0)
-    print(f"✅ Learning complete: {agent.learning_stats}")
+        # Small delay between checks to avoid rate limits
+        if i < len(domains):
+            print(f"⏳ Waiting 2 seconds before next check...")
+            await asyncio.sleep(2)
 
     # Save learned strategies
     agent.save_playbook(str(playbook_path))

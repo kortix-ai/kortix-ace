@@ -76,7 +76,7 @@ class TestPromptsV21(unittest.TestCase):
         self.assertIn("ATOMIC STRATEGY PRINCIPLE", prompt)
         self.assertIn("GOOD - Atomic Strategies", prompt)  # Without emoji
         self.assertIn("BAD - Compound Strategies", prompt)  # Without emoji
-        self.assertIn("DEDUPLICATION PROTOCOL", prompt)
+        self.assertIn("DEDUPLICATION: UPDATE > ADD", prompt)
         self.assertIn("quality_metrics", prompt)
 
     def test_validate_generator_output_v21(self):

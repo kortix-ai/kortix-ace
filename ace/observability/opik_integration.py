@@ -8,6 +8,7 @@ Replaces custom explainability with production-ready Opik platform.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import asdict
@@ -48,6 +49,22 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _should_skip_opik() -> bool:
+    """Check if Opik should be disabled via environment variable.
+
+    Supports both patterns:
+    - OPIK_DISABLED=true/1/yes (disable pattern)
+    - OPIK_ENABLED=false/0/no (enable pattern)
+    """
+    # Check disable pattern: OPIK_DISABLED=true/1/yes
+    if os.environ.get("OPIK_DISABLED", "").lower() in ("true", "1", "yes"):
+        return True
+    # Check enable pattern: OPIK_ENABLED=false/0/no
+    if os.environ.get("OPIK_ENABLED", "").lower() in ("false", "0", "no"):
+        return True
+    return False
+
+
 class OpikIntegration:
     """
     Main integration class for ACE + Opik observability.
@@ -72,18 +89,24 @@ class OpikIntegration:
         """
         self.project_name = project_name
         self.tags = tags or ["ace-framework"]
-        self.enabled = OPIK_AVAILABLE
+        # Check both OPIK_AVAILABLE and env var before enabling
+        self.enabled = OPIK_AVAILABLE and not _should_skip_opik()
 
         if self.enabled and enable_auto_config:
             try:
-                # Configure Opik for local use
+                # Configure Opik for local use without interactive prompts
+                # Set environment variables to prevent prompts
+                os.environ.setdefault("OPIK_URL_OVERRIDE", "http://localhost:5173")
+                os.environ.setdefault("OPIK_WORKSPACE", "default")
                 opik.configure(use_local=True)
                 logger.info(f"Opik configured locally for project: {project_name}")
             except Exception as e:
-                logger.warning(f"Failed to configure Opik: {e}")
+                logger.debug(f"Opik configuration skipped: {e}")
                 self.enabled = False
         elif not OPIK_AVAILABLE:
-            logger.warning("Opik not available. Install with: pip install opik")
+            logger.debug(
+                "Opik not available. Install with: pip install ace-framework[observability]"
+            )
 
     def log_bullet_evolution(
         self,
@@ -335,7 +358,12 @@ def get_integration() -> OpikIntegration:
     """Get or create global Opik integration instance."""
     global _global_integration
     if _global_integration is None:
-        _global_integration = OpikIntegration()
+        if _should_skip_opik():
+            # Return disabled integration
+            _global_integration = OpikIntegration(enable_auto_config=False)
+            _global_integration.enabled = False
+        else:
+            _global_integration = OpikIntegration()
     return _global_integration
 
 
@@ -344,5 +372,13 @@ def configure_opik(
 ) -> OpikIntegration:
     """Configure global Opik integration."""
     global _global_integration
-    _global_integration = OpikIntegration(project_name=project_name, tags=tags)
+    if _should_skip_opik():
+        # Return disabled integration when OPIK_DISABLED is set
+        logger.debug(
+            "Opik configuration skipped via OPIK_DISABLED environment variable"
+        )
+        _global_integration = OpikIntegration(enable_auto_config=False)
+        _global_integration.enabled = False
+    else:
+        _global_integration = OpikIntegration(project_name=project_name, tags=tags)
     return _global_integration

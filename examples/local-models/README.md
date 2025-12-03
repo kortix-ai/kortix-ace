@@ -28,7 +28,7 @@ Quick start guide for using the ACE framework with LM Studio local models.
 pip install ace-framework
 
 # Run the LM Studio starter template
-python examples/LMstudio/lmstudio_starter_template.py
+python examples/local-models/lmstudio_starter_template.py
 ```
 
 ## What This Example Demonstrates

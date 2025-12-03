@@ -227,7 +227,7 @@ class TestLiteLLMConfigDefaults(unittest.TestCase):
         causing Anthropic API errors:
         "temperature and top_p cannot both be specified for this model"
 
-        This broke ACE learning (Reflector/Curator failed, 0 strategies learned).
+        This broke ACE learning (Reflector/SkillManager failed, 0 strategies learned).
         Fixed in commit 9740603.
         """
         from ace.llm_providers.litellm_client import LiteLLMConfig

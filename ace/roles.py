@@ -16,9 +16,9 @@ from .prompts_v2_1 import PromptManager
 
 # Use PromptManager to get v2.1 prompts with {current_date} filled in
 _prompt_manager = PromptManager(default_version="2.1")
-AGENT_PROMPT = _prompt_manager.get_generator_prompt()
+AGENT_PROMPT = _prompt_manager.get_agent_prompt()
 REFLECTOR_PROMPT = _prompt_manager.get_reflector_prompt()
-SKILL_MANAGER_PROMPT = _prompt_manager.get_curator_prompt()
+SKILL_MANAGER_PROMPT = _prompt_manager.get_skill_manager_prompt()
 
 if TYPE_CHECKING:
     from .deduplication import DeduplicationManager

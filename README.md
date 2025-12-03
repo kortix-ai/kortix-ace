@@ -72,13 +72,13 @@ answer2 = agent.ask("If all birds fly, can penguins (birds) fly?")  # Learns to 
 answer3 = agent.ask("If all metals conduct electricity, does copper conduct electricity?")
 
 # View learned strategies
-print(f"✅ Learned {len(agent.playbook.bullets())} reasoning strategies")
+print(f"✅ Learned {len(agent.skillbook.skills())} reasoning strategies")
 
 # Save for reuse
-agent.save_playbook("my_agent.json")
+agent.save_skillbook("my_agent.json")
 
 # Load and continue
-agent2 = ACELiteLLM.from_playbook("my_agent.json", model="gpt-4o-mini")
+agent2 = ACELiteLLM.from_skillbook("my_agent.json", model="gpt-4o-mini")
 ```
 
 ### **ACEAgent (browser-use)** - Browser Automation 🌐
@@ -100,14 +100,14 @@ agent = ACEAgent(
 )
 
 await agent.run(task="Find top Hacker News post")
-agent.save_playbook("hn_expert.json")
+agent.save_skillbook("hn_expert.json")
 
 # Reuse learned knowledge
-agent = ACEAgent(llm=ChatBrowserUse(), playbook_path="hn_expert.json")
+agent = ACEAgent(llm=ChatBrowserUse(), skillbook_path="hn_expert.json")
 await agent.run(task="New task")  # Starts smart!
 ```
 
-**Features:** Drop-in replacement for `browser_use.Agent`, automatic learning, reusable playbooks
+**Features:** Drop-in replacement for `browser_use.Agent`, automatic learning, reusable skillbooks
 **[→ Browser Use Guide](examples/browser-use/README.md)**
 
 ### **ACELangChain** - Complex Workflows ⛓️
@@ -182,9 +182,9 @@ uv run python examples/litellm/seahorse_emoji_ace.py
 *Based on the [ACE research framework](https://arxiv.org/abs/2510.04618) from Stanford & SambaNova.*
 
 ACE uses three specialized roles that work together:
-1. **🎯 Generator** - Creates strategies using learned patterns from the playbook
+1. **🎯 Agent** - Creates strategies using learned patterns from the skillbook
 2. **🔍 Reflector** - Analyzes what worked and what didn't after execution
-3. **📝 Curator** - Updates the playbook with new strategies based on reflection
+3. **📝 SkillManager** - Updates the skillbook with new strategies based on reflection
 
 **Important:** The three ACE roles are different specialized prompts using the same language model, not separate models.
 
@@ -194,7 +194,7 @@ ACE teaches your agent and internalises:
 - **🔧 Tool usage** → Discover which tools work best for which tasks
 - **🎯 Edge cases** → Remember rare scenarios and how to handle them
 
-The magic happens in the **Playbook**—a living document of strategies that evolves with experience. <br>
+The magic happens in the **Skillbook**—a living document of strategies that evolves with experience. <br>
 **Key innovation:** All learning happens **in context** through incremental updates—no fine-tuning, no training data, and complete transparency into what your agent learned.
 
 ```mermaid
@@ -204,16 +204,16 @@ config:
   theme: neutral
 ---
 flowchart LR
-    Playbook[("`**📚 Playbook**<br>(Evolving Context)<br><br>•Strategy Bullets<br> ✓ Helpful strategies <br>✗ Harmful patterns <br>○ Neutral observations`")]
-    Start(["**📝Query** <br>User prompt or question"]) --> Generator["**⚙️Generator** <br>Executes task using playbook"]
-    Generator --> Reflector
-    Playbook -. Provides Context .-> Generator
+    Skillbook[("`**📚 Skillbook**<br>(Evolving Context)<br><br>•Strategy Skills<br> ✓ Helpful strategies <br>✗ Harmful patterns <br>○ Neutral observations`")]
+    Start(["**📝Query** <br>User prompt or question"]) --> Agent["**⚙️Agent** <br>Executes task using skillbook"]
+    Agent --> Reflector
+    Skillbook -. Provides Context .-> Agent
     Environment["**🌍 Task Environment**<br>Evaluates answer<br>Provides feedback"] -- Feedback+ <br>Optional Ground Truth --> Reflector
     Reflector["**🔍 Reflector**<br>Analyzes and provides feedback what was helpful/harmful"]
-    Reflector --> Curator["**📝 Curator**<br>Produces improvement deltas"]
-    Curator --> DeltaOps["**🔀Merger** <br>Updates the playbook with deltas"]
-    DeltaOps -- Incremental<br>Updates --> Playbook
-    Generator <--> Environment
+    Reflector --> SkillManager["**📝 SkillManager**<br>Produces improvement updates"]
+    SkillManager --> UpdateOps["**🔀Merger** <br>Updates the skillbook with updates"]
+    UpdateOps -- Incremental<br>Updates --> Skillbook
+    Agent <--> Environment
 ```
 
 ---
@@ -255,7 +255,7 @@ pip install ace-framework[observability]
 export OPIK_API_KEY="your-api-key"
 ```
 
-Automatically tracks: LLM calls, costs, playbook evolution. View at [comet.com/opik](https://www.comet.com/opik)
+Automatically tracks: LLM calls, costs, skillbook evolution. View at [comet.com/opik](https://www.comet.com/opik)
 
 ---
 

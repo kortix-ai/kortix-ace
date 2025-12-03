@@ -108,17 +108,17 @@ class OpikIntegration:
                 "Opik not available. Install with: pip install ace-framework[observability]"
             )
 
-    def log_bullet_evolution(
+    def log_skill_evolution(
         self,
-        bullet_id: str,
-        bullet_content: str,
+        skill_id: str,
+        skill_content: str,
         helpful_count: int,
         harmful_count: int,
         neutral_count: int,
         section: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Log bullet evolution metrics to Opik."""
+        """Log skill evolution metrics to Opik."""
         if not self.enabled:
             return
 
@@ -127,18 +127,18 @@ class OpikIntegration:
             total_votes = helpful_count + harmful_count + neutral_count
             effectiveness = helpful_count / total_votes if total_votes > 0 else 0.0
 
-            # Update current trace with bullet metrics
+            # Update current trace with skill metrics
             opik_context.update_current_trace(
                 feedback_scores=[
                     {
-                        "name": "bullet_effectiveness",
+                        "name": "skill_effectiveness",
                         "value": effectiveness,
-                        "reason": f"Bullet {bullet_id}: {helpful_count}H/{harmful_count}H/{neutral_count}N",
+                        "reason": f"Skill {skill_id}: {helpful_count}H/{harmful_count}H/{neutral_count}N",
                     }
                 ],
                 metadata={
-                    "bullet_id": bullet_id,
-                    "bullet_content": bullet_content,
+                    "skill_id": skill_id,
+                    "skill_content": skill_content,
                     "section": section,
                     "helpful_count": helpful_count,
                     "harmful_count": harmful_count,
@@ -146,21 +146,26 @@ class OpikIntegration:
                     "total_votes": total_votes,
                     **(metadata or {}),
                 },
-                tags=self.tags + ["bullet-evolution"],
+                tags=self.tags + ["skill-evolution"],
             )
         except Exception as e:
-            logger.error(f"Failed to log bullet evolution: {e}")
+            logger.error(f"Failed to log skill evolution: {e}")
 
-    def log_playbook_update(
+    # Backward compatibility alias
+    def log_bullet_evolution(self, *args, **kwargs) -> None:
+        """Deprecated: Use log_skill_evolution instead."""
+        return self.log_skill_evolution(*args, **kwargs)
+
+    def log_skillbook_update(
         self,
         operation_type: str,
-        bullets_added: int = 0,
-        bullets_updated: int = 0,
-        bullets_removed: int = 0,
-        total_bullets: int = 0,
+        skills_added: int = 0,
+        skills_updated: int = 0,
+        skills_removed: int = 0,
+        total_skills: int = 0,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Log playbook update metrics to Opik."""
+        """Log skillbook update metrics to Opik."""
         if not self.enabled:
             return
 
@@ -168,23 +173,28 @@ class OpikIntegration:
             opik_context.update_current_trace(
                 feedback_scores=[
                     {
-                        "name": "playbook_size",
-                        "value": float(total_bullets),
-                        "reason": f"Playbook contains {total_bullets} bullets after {operation_type}",
+                        "name": "skillbook_size",
+                        "value": float(total_skills),
+                        "reason": f"Skillbook contains {total_skills} skills after {operation_type}",
                     }
                 ],
                 metadata={
                     "operation_type": operation_type,
-                    "bullets_added": bullets_added,
-                    "bullets_updated": bullets_updated,
-                    "bullets_removed": bullets_removed,
-                    "total_bullets": total_bullets,
+                    "skills_added": skills_added,
+                    "skills_updated": skills_updated,
+                    "skills_removed": skills_removed,
+                    "total_skills": total_skills,
                     **(metadata or {}),
                 },
-                tags=self.tags + ["playbook-update"],
+                tags=self.tags + ["skillbook-update"],
             )
         except Exception as e:
-            logger.error(f"Failed to log playbook update: {e}")
+            logger.error(f"Failed to log skillbook update: {e}")
+
+    # Backward compatibility alias
+    def log_playbook_update(self, *args, **kwargs) -> None:
+        """Deprecated: Use log_skillbook_update instead."""
+        return self.log_skillbook_update(*args, **kwargs)
 
     def log_role_performance(
         self,
@@ -231,7 +241,7 @@ class OpikIntegration:
         epoch: int,
         step: int,
         performance_score: float,
-        bullet_count: int,
+        skill_count: int,
         successful_predictions: int,
         total_predictions: int,
         metadata: Optional[Dict[str, Any]] = None,
@@ -264,7 +274,7 @@ class OpikIntegration:
                     "epoch": epoch,
                     "step": step,
                     "performance_score": performance_score,
-                    "bullet_count": bullet_count,
+                    "skill_count": skill_count,
                     "successful_predictions": successful_predictions,
                     "total_predictions": total_predictions,
                     "accuracy": accuracy,

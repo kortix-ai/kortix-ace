@@ -249,7 +249,7 @@ class TestLiteLLMConfigDefaults(unittest.TestCase):
 
 @pytest.mark.unit
 class TestACELiteLLMConfiguration(unittest.TestCase):
-    """Test ACELiteLLM configuration parameter passing (Issue #33)."""
+    """Test ACELiteLLM configuration parameter passing."""
 
     def _mock_response(self):
         """Create mock LiteLLM response."""
@@ -334,21 +334,18 @@ class TestACELiteLLMConfiguration(unittest.TestCase):
 
         from ace.integrations import ACELiteLLM
 
-        # This should work exactly as before Issue #33
         agent = ACELiteLLM(model="gpt-4o-mini", max_tokens=1024, temperature=0.5)
         self.assertEqual(agent.model, "gpt-4o-mini")
         self.assertEqual(agent.llm.config.max_tokens, 1024)
         self.assertEqual(agent.llm.config.temperature, 0.5)
-        # New Issue #33 params should be None by default (before env var fallback)
-        # Note: api_key may be picked up from env vars by _setup_api_keys()
-        # which is existing behavior - backward compatible!
+        # New params should be None by default (api_key may be picked up from env vars)
         self.assertIsNone(agent.llm.config.extra_headers)
         self.assertIsNone(agent.llm.config.ssl_verify)
 
 
 @pytest.mark.unit
 class TestLiteLLMClientDirectConfig(unittest.TestCase):
-    """Test LiteLLMClient direct configuration (Issue #33)."""
+    """Test LiteLLMClient direct configuration."""
 
     def _mock_response(self):
         """Create mock LiteLLM response."""

@@ -4,9 +4,6 @@ Test ACE with LM Studio (Ollama-compatible model).
 
 LM Studio runs an OpenAI-compatible API server, so we use the
 openai/ prefix with a custom base_url instead of ollama/.
-
-Note: Since Issue #33, you can pass base_url directly to ACELiteLLM
-instead of using environment variables.
 """
 
 from ace.integrations import ACELiteLLM
@@ -21,7 +18,7 @@ def main():
     lm_studio_url = "http://localhost:1234/v1"
 
     # 1. Create ACELiteLLM agent pointing to LM Studio
-    # Note: Use "openai/" prefix with base_url for LM Studio (Issue #33)
+    # Note: Use "openai/" prefix with base_url for LM Studio
     print(f"\n📡 Connecting to LM Studio at {lm_studio_url}...")
 
     playbook_path = Path("lm_studio_learned_strategies.json")
@@ -29,7 +26,7 @@ def main():
     try:
         agent = ACELiteLLM(
             model="openai/local-model",  # LM Studio serves any model as 'local-model'
-            base_url=lm_studio_url,  # Direct parameter (Issue #33) - no env var needed!
+            base_url=lm_studio_url,
             max_tokens=512,
             temperature=0.2,
             is_learning=True,

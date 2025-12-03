@@ -64,7 +64,7 @@ class LiteLLMConfig:
     # Anthropic API limitation: temperature and top_p cannot both be specified
     sampling_priority: str = "temperature"  # "temperature" | "top_p" | "top_k"
 
-    # HTTP/SSL settings (Issue #33)
+    # HTTP/SSL settings
     extra_headers: Optional[Dict[str, str]] = None  # Custom HTTP headers
     ssl_verify: Optional[Union[bool, str]] = None  # True/False or path to CA bundle
 
@@ -440,7 +440,7 @@ class LiteLLMClient(LLMClient):
         if self.config.api_base:
             call_params["api_base"] = self.config.api_base
 
-        # Add HTTP/SSL settings (Issue #33)
+        # Add HTTP/SSL settings
         if self.config.extra_headers:
             call_params["extra_headers"] = self.config.extra_headers
         if self.config.ssl_verify is not None:
@@ -570,7 +570,7 @@ class LiteLLMClient(LLMClient):
         if self.config.api_base:
             call_params["api_base"] = self.config.api_base
 
-        # Add HTTP/SSL settings (Issue #33)
+        # Add HTTP/SSL settings
         if self.config.extra_headers:
             call_params["extra_headers"] = self.config.extra_headers
         if self.config.ssl_verify is not None:

@@ -103,10 +103,10 @@ class ACELiteLLM:
         model: str = "gpt-4o-mini",
         max_tokens: int = 2048,
         temperature: float = 0.0,
-        # Authentication & endpoint (Issue #33)
+        # Authentication & endpoint
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        # HTTP/SSL settings (Issue #33)
+        # HTTP/SSL settings
         extra_headers: Optional[Dict[str, str]] = None,
         ssl_verify: Optional[Union[bool, str]] = None,
         # ACE-specific settings
@@ -146,16 +146,16 @@ class ACELiteLLM:
             # Google
             agent = ACELiteLLM(model="gemini/gemini-pro")
 
-            # With explicit API key (Issue #33)
+            # With explicit API key
             agent = ACELiteLLM(model="gpt-4", api_key="sk-...")
 
-            # Custom endpoint - LM Studio, Ollama (Issue #33)
+            # Custom endpoint (LM Studio, Ollama)
             agent = ACELiteLLM(
                 model="openai/local-model",
                 base_url="http://localhost:1234/v1"
             )
 
-            # Enterprise with custom headers and SSL (Issue #33)
+            # Enterprise with custom headers and SSL
             agent = ACELiteLLM(
                 model="gpt-4",
                 base_url="https://proxy.company.com/v1",
@@ -196,7 +196,7 @@ class ACELiteLLM:
         else:
             self.playbook = Playbook()
 
-        # Create LLM client with configuration (Issue #33)
+        # Create LLM client with configuration
         self.llm = LiteLLMClient(
             model=model,
             max_tokens=max_tokens,

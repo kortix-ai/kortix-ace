@@ -73,9 +73,10 @@ def example_basic_chain():
     # Check learned strategies
     print(f"\nLearned {len(ace_chain.skillbook.skills())} strategies")
 
-    # Save skillbook
-    ace_chain.save_skillbook("simple_chain_learned.json")
-    print("\nSkillbook saved to: simple_chain_learned.json")
+    # Save skillbook in the same directory as this script
+    skillbook_path = os.path.join(os.path.dirname(__file__), "simple_chain_learned.json")
+    ace_chain.save_skillbook(skillbook_path)
+    print(f"\nSkillbook saved to: {skillbook_path}")
 
 
 def example_reuse_skillbook():
@@ -89,7 +90,8 @@ def example_reuse_skillbook():
         return
 
     # Check if skillbook exists
-    if not os.path.exists("simple_chain_learned.json"):
+    skillbook_path = os.path.join(os.path.dirname(__file__), "simple_chain_learned.json")
+    if not os.path.exists(skillbook_path):
         print("No skillbook found. Run Example 1 first!")
         return
 
@@ -102,7 +104,7 @@ def example_reuse_skillbook():
     ace_chain = ACELangChain(
         runnable=chain,
         ace_model="claude-sonnet-4-5-20250929",
-        skillbook_path="simple_chain_learned.json",
+        skillbook_path=skillbook_path,
         is_learning=True,
     )
 

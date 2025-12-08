@@ -58,7 +58,7 @@ ACE provides four ready-to-use integrations:
 
 **[→ Integration Guide](docs/INTEGRATION_GUIDE.md)** | **[→ Examples](examples/)**
 
-### **ACELiteLLM** - Simplest Start 🚀
+### 1. **ACELiteLLM** - Simplest Start 🚀
 
 Create your self-improving agent:
 
@@ -88,7 +88,7 @@ agent2 = ACELiteLLM.from_skillbook("my_agent.json", model="gpt-4o-mini")
 
 </details>
 
-### **ACELangChain** - Wrap ACE Around Your Existing Agent ⛓️
+### 2. **ACELangChain** - Wrap ACE Around Your Existing Agent ⛓️
 
 Wrap any LangChain chain/agent with learning:
 
@@ -106,7 +106,7 @@ result = ace_chain.invoke({"question": "Your task"})  # Learns automatically
 
 </details>
 
-### **ACEAgent** - Enhance Browser-Use Agent with Self-Optimizing 🌐
+### 3. **ACEAgent** - Enhance Browser-Use Agent with Self-Optimizing 🌐
 
 Self-improving browser agents with [browser-use](https://github.com/browser-use/browser-use):
 
@@ -140,7 +140,7 @@ await agent.run(task="New task")  # Starts smart!
 
 </details>
 
-### **ACEClaudeCode** - Claude Code CLI 💻
+### 4. **ACEClaudeCode** - Claude Code CLI 💻
 
 Self-improving coding agent using [Claude Code](https://claude.ai/code):
 

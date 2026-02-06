@@ -33,6 +33,28 @@ Enhancement suggestions are welcome! Please provide:
 6. Push to your branch
 7. Open a Pull Request
 
+## Branch Naming Convention
+
+Use consistent prefixes for branch names:
+
+| Prefix | Purpose | Example |
+|--------|---------|---------|
+| `feature/` | New features | `feature/john/benchmarks` |
+| `fix/` | Bug fixes | `fix/jane/memory-leak` |
+| `docs/` | Documentation changes | `docs/john/api-reference` |
+| `refactor/` | Code refactoring | `refactor/jane/llm-client` |
+| `test/` | Test additions/fixes | `test/john/integration-suite` |
+| `chore/` | Maintenance tasks | `chore/jane/update-deps` |
+
+**Format:** `<type>/<developer>/<description>`
+
+**Rules:**
+- Use lowercase with hyphens (kebab-case)
+- Use your GitHub username or first name as developer identifier
+- Keep descriptions short but descriptive
+- Include issue number if applicable: `fix/john/123-login-error`
+- Never push directly to `main` - always use feature branches
+
 ## Development Setup
 
 ```bash

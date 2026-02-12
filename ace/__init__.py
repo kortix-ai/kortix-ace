@@ -81,29 +81,35 @@ try:
         ACEAgent as _ACEAgent,
         ACELangChain as _ACELangChain,
         ACEClaudeCode as _ACEClaudeCode,
+        ACEKortix as _ACEKortix,
         wrap_skillbook_context as _wrap_skillbook_context,
         BROWSER_USE_AVAILABLE as _BROWSER_USE_AVAILABLE,
         LANGCHAIN_AVAILABLE as _LANGCHAIN_AVAILABLE,
         CLAUDE_CODE_AVAILABLE as _CLAUDE_CODE_AVAILABLE,
+        KORTIX_AVAILABLE as _KORTIX_AVAILABLE,
     )
 
     ACELiteLLM: Optional[type] = _ACELiteLLM
     ACEAgent: Optional[type] = _ACEAgent
     ACELangChain: Optional[type] = _ACELangChain
     ACEClaudeCode: Optional[type] = _ACEClaudeCode
+    ACEKortix: Optional[type] = _ACEKortix
     wrap_skillbook_context: Optional[type] = _wrap_skillbook_context  # type: ignore
     BROWSER_USE_AVAILABLE = _BROWSER_USE_AVAILABLE
     LANGCHAIN_AVAILABLE = _LANGCHAIN_AVAILABLE
     CLAUDE_CODE_AVAILABLE = _CLAUDE_CODE_AVAILABLE
+    KORTIX_AVAILABLE = _KORTIX_AVAILABLE
 except ImportError:
     ACELiteLLM: Optional[type] = None  # type: ignore
     ACEAgent: Optional[type] = None  # type: ignore
     ACELangChain: Optional[type] = None  # type: ignore
     ACEClaudeCode: Optional[type] = None  # type: ignore
+    ACEKortix: Optional[type] = None  # type: ignore
     wrap_skillbook_context: Optional[type] = None  # type: ignore
     BROWSER_USE_AVAILABLE = False
     LANGCHAIN_AVAILABLE = False
     CLAUDE_CODE_AVAILABLE = False
+    KORTIX_AVAILABLE = False
 
 # Import deduplication module
 from .deduplication import (

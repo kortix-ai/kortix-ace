@@ -72,6 +72,16 @@ except ImportError:
     ClaudeCodeResult = None  # type: ignore
     CLAUDE_CODE_AVAILABLE = False
 
+# Import Kortix integration (always available)
+try:
+    from .kortix import ACEKortix, KortixResult, KortixClient
+    KORTIX_AVAILABLE = True
+except ImportError:
+    ACEKortix = None  # type: ignore
+    KortixResult = None  # type: ignore
+    KortixClient = None  # type: ignore
+    KORTIX_AVAILABLE = False
+
 # Import Claude Code learner integration (always available)
 try:
     from .claude_code import (
@@ -104,8 +114,13 @@ __all__ = [
     "find_latest_transcript",
     "find_project_root",
     "update_claude_md",
+    # Kortix integration
+    "ACEKortix",
+    "KortixResult",
+    "KortixClient",
     # Feature flags
     "BROWSER_USE_AVAILABLE",
     "LANGCHAIN_AVAILABLE",
     "CLAUDE_CODE_AVAILABLE",
+    "KORTIX_AVAILABLE",
 ]

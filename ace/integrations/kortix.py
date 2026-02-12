@@ -22,6 +22,7 @@ Example:
 
 import json
 import queue
+import re
 import threading
 import time
 import logging
@@ -51,6 +52,55 @@ description: "Learned execution strategies from ACE. Patterns extracted from pas
 
 {strategies}
 """
+
+
+# --- Message filtering (aligned with claude_code learner.py) ---
+
+# Regex to strip <system-reminder>...</system-reminder> blocks
+_SYSTEM_REMINDER_RE = re.compile(
+    r"<system-reminder>.*?</system-reminder>", re.DOTALL
+)
+
+# Patterns that indicate ACE-recursive content (learning about its own learning)
+_ACE_RECURSIVE_PATTERNS = (
+    "ace-learn",
+    "ACE Learning",
+    "Running Reflector",
+    "Running SkillManager",
+    "Learning from transcript",
+    "SKILL.md",
+    "skillbook.json",
+    "ace.integrations.",
+    "[learn]",
+    "[engine]",
+)
+
+# Tool result compression (head+tail instead of flat truncation)
+_MAX_RESULT_SIZE = 1000
+_HEAD_SIZE = 500
+_TAIL_SIZE = 200
+
+
+def _strip_system_noise(text: str) -> str:
+    """Strip <system-reminder> blocks and <ide_*> prefixed content from text."""
+    text = _SYSTEM_REMINDER_RE.sub("", text)
+    if text.strip().startswith("<ide_"):
+        return ""
+    return text.strip()
+
+
+def _is_ace_recursive(text: str) -> bool:
+    """Detect ACE-recursive content (learning about its own learning)."""
+    lower = text.lower()
+    return any(pat.lower() in lower for pat in _ACE_RECURSIVE_PATTERNS)
+
+
+def _compress_tool_result(content: str) -> str:
+    """Truncate large tool results, keeping head and tail for context."""
+    if len(content) <= _MAX_RESULT_SIZE:
+        return content
+    truncated = len(content) - _HEAD_SIZE - _TAIL_SIZE
+    return f"{content[:_HEAD_SIZE]}\n... [{truncated} chars truncated] ...\n{content[-_TAIL_SIZE:]}"
 
 
 @dataclass
@@ -157,7 +207,7 @@ class KortixClient:
             List of message dicts with info/parts structure.
         """
         resp = self.session.get(
-            f"{self.base_url}/session/{session_id}/messages",
+            f"{self.base_url}/session/{session_id}/message",
             timeout=self.timeout,
         )
         resp.raise_for_status()
@@ -440,9 +490,18 @@ class ACEKortix:
                 msg_tokens = info.get("tokens", {})
                 if msg_tokens:
                     for k, v in msg_tokens.items():
-                        total_tokens[k] = total_tokens.get(k, 0) + v
+                        if isinstance(v, (int, float)):
+                            total_tokens[k] = total_tokens.get(k, 0) + v
 
-            # Only process assistant parts for trace
+            # Include user instructions in trace (filter system noise)
+            if role == "user":
+                for part in msg.get("parts", []):
+                    if part.get("type") == "text":
+                        text = _strip_system_noise(part.get("text", ""))
+                        if text and not _is_ace_recursive(text):
+                            trace_parts.append(f"[User] {text[:300]}")
+                continue
+
             if role != "assistant":
                 continue
 
@@ -451,10 +510,15 @@ class ACEKortix:
                 part_type = part.get("type", "")
 
                 if part_type == "text":
-                    text = part.get("text", "").strip()
-                    if text:
+                    text = _strip_system_noise(part.get("text", ""))
+                    if text and not _is_ace_recursive(text):
                         trace_parts.append(f"[Reasoning] {text[:300]}")
                         final_text = text
+
+                elif part_type == "reasoning":
+                    text = part.get("text", "").strip()
+                    if text and not _is_ace_recursive(text):
+                        trace_parts.append(f"[Thinking] {text[:200]}")
 
                 elif part_type == "tool":
                     step_num += 1
@@ -481,13 +545,14 @@ class ACEKortix:
 
                     trace_parts.append(f"[Step {step_num}] {tool_name}: {input_summary}")
 
-                    # Add output or error
+                    # Add output or error (preserve full errors, compress results)
                     if tool_error:
-                        trace_parts.append(f"  -> ERROR: {str(tool_error)[:200]}")
+                        trace_parts.append(f"  -> ERROR: {str(tool_error)[:500]}")
                     elif tool_output:
-                        trace_parts.append(f"  -> {str(tool_output)[:200]}")
+                        compressed = _compress_tool_result(str(tool_output))
+                        trace_parts.append(f"  -> {compressed}")
 
-                # Skip reasoning/thinking parts, step-start, step-finish
+                # Skip step-start, step-finish, snapshot, patch parts
 
         execution_trace = (
             "\n".join(trace_parts) if trace_parts else "(No trace captured)"
@@ -515,9 +580,20 @@ class ACEKortix:
             },
         )
 
-        # Build feedback
+        # Build feedback with tool success metrics
         status = "succeeded" if result.success else "failed"
-        feedback = f"Kortix task {status}"
+        total_tools = result.execution_trace.count("[Step ")
+        failed_tools = result.execution_trace.count("-> ERROR:")
+        if total_tools > 0:
+            success_rate = (total_tools - failed_tools) / total_tools * 100
+            feedback = (
+                f"Kortix task {status}: {total_tools} tool calls, "
+                f"{success_rate:.0f}% success rate"
+            )
+            if failed_tools > 0:
+                feedback += f" ({failed_tools} failures)"
+        else:
+            feedback = f"Kortix task {status}"
         if result.error:
             feedback += f"\nError: {result.error}"
         if result.feedback_rating is not None:
@@ -630,6 +706,63 @@ class ACEKortix:
 
         except Exception as e:
             logger.error(f"Failed to learn from session {session_id}: {e}")
+            return False
+
+    def learn_from_messages(
+        self,
+        messages: List[Dict[str, Any]],
+        task: str,
+        session_id: str = "",
+        feedback_rating: Optional[int] = None,
+        feedback_text: Optional[str] = None,
+        context_summary: Optional[str] = None,
+    ) -> bool:
+        """
+        Learn from a pre-fetched list of OpenCode messages.
+
+        Unlike learn_from_session() which fetches all messages from a session,
+        this method accepts an already-filtered message list. Useful for
+        incremental learning where the caller controls which messages to analyze.
+
+        Args:
+            messages: List of OpenCode message dicts (info/parts structure).
+            task: The user's task/request for this turn.
+            session_id: Session ID for logging/tracking.
+            feedback_rating: Optional 1-5 star rating.
+            feedback_text: Optional text feedback.
+            context_summary: Optional summary of prior context to prepend
+                to the execution trace (e.g., prior turn summaries).
+
+        Returns:
+            True if learning succeeded, False otherwise.
+        """
+        try:
+            if not messages:
+                logger.warning("No messages provided for learning")
+                return False
+
+            output, trace, cost, tokens = self._parse_messages(messages)
+
+            # Prepend context summary if provided
+            if context_summary:
+                trace = f"[Prior Context]\n{context_summary}\n\n[Current Turn]\n{trace}"
+
+            result = KortixResult(
+                success=True,
+                output=output,
+                execution_trace=trace,
+                session_id=session_id,
+                cost=cost,
+                tokens=tokens,
+                feedback_rating=feedback_rating,
+                feedback_text=feedback_text,
+            )
+
+            self._learn_from_execution(task, result)
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to learn from messages: {e}")
             return False
 
     def save_skillbook(self, path: str) -> None:

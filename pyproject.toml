@@ -80,6 +80,7 @@ all = [
 
 [project.scripts]
 ace-learn = "ace.integrations.claude_code.learner:main"
+ace-learn-opencode = "ace.integrations.opencode.cli:main"
 
 [project.urls]
 Homepage = "https://kayba.ai"
